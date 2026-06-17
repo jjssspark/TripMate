@@ -1,0 +1,41 @@
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #0066ff;
+  --color-primary-container: #0066ff;
+  --color-on-primary-container: #ffffff;
+  --color-surface-container-low: #f1f3f5;
+  --color-surface-container-lowest: #ffffff;
+  --color-on-surface: #212529;
+  --color-on-surface-variant: #495057;
+  --color-outline: #868e96;
+  --color-outline-variant: #dee2e6;
+  --color-error: #fa5252;
+  --color-error-container: #ffe3e3;
+
+  --font-sans: "Inter", system-ui, sans-serif;
+  --font-headline-lg: "Space Grotesk", sans-serif;
+}
+
+/* Material symbols adjustments */
+.material-symbols-outlined {
+  font-variation-settings:
+    'FILL' 0,
+    'wght' 500,
+    'GRAD' 0,
+    'opsz' 24;
+}
+
+/* Custom Hide Scrollbar classes */
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}

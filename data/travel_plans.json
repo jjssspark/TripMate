@@ -1,0 +1,502 @@
+[
+  {
+    "title": "ㅇㅇㅇ",
+    "destination": "ㅇㅇ",
+    "startDate": "2026-07-03",
+    "endDate": "2026-07-10",
+    "duration": "7박 8일",
+    "budget": "표준형",
+    "companion": "혼자",
+    "styles": [
+      "맛집",
+      "자연"
+    ],
+    "mustVisitPlaces": "전망대",
+    "planContent": [
+      {
+        "day": 1,
+        "theme": "ㅇㅇ에서의 특별한 하루 - 1일차",
+        "description": "ㅇㅇ의 핵심 하이라이트를 탐방하는 일차별 스마트 동선입니다.",
+        "activities": [
+          {
+            "time": "오전 09:30",
+            "title": "전망대",
+            "description": "놓치고 싶지 않은 이 지역 최고의 랜드마크를 방문하여 아침 산책과 기념사진 촬영을 즐깁니다.",
+            "location": "ㅇㅇ 시내 중심가",
+            "category": "관광",
+            "mustVisit": true,
+            "tags": [
+              "랜드마크",
+              "아침산책",
+              "인생샷"
+            ],
+            "imageUrl": "https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=500&auto=format&fit=crop"
+          },
+          {
+            "time": "오후 12:30",
+            "title": "추천 한식/현지식 소문난 맛집",
+            "description": "인근에서 가장 유명하고 후기가 극찬인 레스토랑에서 든든하게 점심 식사를 즐깁니다.",
+            "location": "ㅇㅇ 번화가",
+            "category": "맛집",
+            "tags": [
+              "현지맛집",
+              "미식탐방",
+              "강력추천"
+            ],
+            "imageUrl": "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=500&auto=format&fit=crop"
+          },
+          {
+            "time": "오후 02:30",
+            "title": "감성 가득한 로컬 스페셜티 카페",
+            "description": "스타일리시한 인테리어와 수제 디저트가 일품인 핫플레이스 카페에서 차 한잔을 기울이며 휴식을 누립니다.",
+            "location": "ㅇㅇ 골목 정취",
+            "category": "카페",
+            "tags": [
+              "감성카페",
+              "수제디저트",
+              "힐링"
+            ],
+            "imageUrl": "https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?w=500&auto=format&fit=crop"
+          },
+          {
+            "time": "오후 05:00",
+            "title": "쇼핑 스트리트 및 소품샵 구경",
+            "description": "로컬 소품과 한정판 기념품을 만나볼 수 있는 개성 넘치는 거리를 구경하며 지인들 선물을 마련합니다.",
+            "location": "ㅇㅇ 쇼핑 에비뉴",
+            "category": "쇼핑",
+            "tags": [
+              "쇼핑",
+              "기념품",
+              "거리탐방"
+            ],
+            "imageUrl": "https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=500&auto=format&fit=crop"
+          }
+        ]
+      },
+      {
+        "day": 2,
+        "theme": "ㅇㅇ에서의 특별한 하루 - 2일차",
+        "description": "ㅇㅇ의 핵심 하이라이트를 탐방하는 일차별 스마트 동선입니다.",
+        "activities": [
+          {
+            "time": "오전 09:30",
+            "title": "ㅇㅇ 인기 탐방 명소",
+            "description": "놓치고 싶지 않은 이 지역 최고의 랜드마크를 방문하여 아침 산책과 기념사진 촬영을 즐깁니다.",
+            "location": "ㅇㅇ 시내 중심가",
+            "category": "관광",
+            "mustVisit": false,
+            "tags": [
+              "랜드마크",
+              "아침산책",
+              "인생샷"
+            ],
+            "imageUrl": "https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=500&auto=format&fit=crop"
+          },
+          {
+            "time": "오후 12:30",
+            "title": "추천 한식/현지식 소문난 맛집",
+            "description": "인근에서 가장 유명하고 후기가 극찬인 레스토랑에서 든든하게 점심 식사를 즐깁니다.",
+            "location": "ㅇㅇ 번화가",
+            "category": "맛집",
+            "tags": [
+              "현지맛집",
+              "미식탐방",
+              "강력추천"
+            ],
+            "imageUrl": "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=500&auto=format&fit=crop"
+          },
+          {
+            "time": "오후 02:30",
+            "title": "감성 가득한 로컬 스페셜티 카페",
+            "description": "스타일리시한 인테리어와 수제 디저트가 일품인 핫플레이스 카페에서 차 한잔을 기울이며 휴식을 누립니다.",
+            "location": "ㅇㅇ 골목 정취",
+            "category": "카페",
+            "tags": [
+              "감성카페",
+              "수제디저트",
+              "힐링"
+            ],
+            "imageUrl": "https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?w=500&auto=format&fit=crop"
+          },
+          {
+            "time": "오후 05:00",
+            "title": "쇼핑 스트리트 및 소품샵 구경",
+            "description": "로컬 소품과 한정판 기념품을 만나볼 수 있는 개성 넘치는 거리를 구경하며 지인들 선물을 마련합니다.",
+            "location": "ㅇㅇ 쇼핑 에비뉴",
+            "category": "쇼핑",
+            "tags": [
+              "쇼핑",
+              "기념품",
+              "거리탐방"
+            ],
+            "imageUrl": "https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=500&auto=format&fit=crop"
+          }
+        ]
+      },
+      {
+        "day": 3,
+        "theme": "ㅇㅇ에서의 특별한 하루 - 3일차",
+        "description": "ㅇㅇ의 핵심 하이라이트를 탐방하는 일차별 스마트 동선입니다.",
+        "activities": [
+          {
+            "time": "오전 09:30",
+            "title": "ㅇㅇ 인기 탐방 명소",
+            "description": "놓치고 싶지 않은 이 지역 최고의 랜드마크를 방문하여 아침 산책과 기념사진 촬영을 즐깁니다.",
+            "location": "ㅇㅇ 시내 중심가",
+            "category": "관광",
+            "mustVisit": false,
+            "tags": [
+              "랜드마크",
+              "아침산책",
+              "인생샷"
+            ],
+            "imageUrl": "https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=500&auto=format&fit=crop"
+          },
+          {
+            "time": "오후 12:30",
+            "title": "추천 한식/현지식 소문난 맛집",
+            "description": "인근에서 가장 유명하고 후기가 극찬인 레스토랑에서 든든하게 점심 식사를 즐깁니다.",
+            "location": "ㅇㅇ 번화가",
+            "category": "맛집",
+            "tags": [
+              "현지맛집",
+              "미식탐방",
+              "강력추천"
+            ],
+            "imageUrl": "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=500&auto=format&fit=crop"
+          },
+          {
+            "time": "오후 02:30",
+            "title": "감성 가득한 로컬 스페셜티 카페",
+            "description": "스타일리시한 인테리어와 수제 디저트가 일품인 핫플레이스 카페에서 차 한잔을 기울이며 휴식을 누립니다.",
+            "location": "ㅇㅇ 골목 정취",
+            "category": "카페",
+            "tags": [
+              "감성카페",
+              "수제디저트",
+              "힐링"
+            ],
+            "imageUrl": "https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?w=500&auto=format&fit=crop"
+          },
+          {
+            "time": "오후 05:00",
+            "title": "쇼핑 스트리트 및 소품샵 구경",
+            "description": "로컬 소품과 한정판 기념품을 만나볼 수 있는 개성 넘치는 거리를 구경하며 지인들 선물을 마련합니다.",
+            "location": "ㅇㅇ 쇼핑 에비뉴",
+            "category": "쇼핑",
+            "tags": [
+              "쇼핑",
+              "기념품",
+              "거리탐방"
+            ],
+            "imageUrl": "https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=500&auto=format&fit=crop"
+          }
+        ]
+      },
+      {
+        "day": 4,
+        "theme": "ㅇㅇ에서의 특별한 하루 - 4일차",
+        "description": "ㅇㅇ의 핵심 하이라이트를 탐방하는 일차별 스마트 동선입니다.",
+        "activities": [
+          {
+            "time": "오전 09:30",
+            "title": "ㅇㅇ 인기 탐방 명소",
+            "description": "놓치고 싶지 않은 이 지역 최고의 랜드마크를 방문하여 아침 산책과 기념사진 촬영을 즐깁니다.",
+            "location": "ㅇㅇ 시내 중심가",
+            "category": "관광",
+            "mustVisit": false,
+            "tags": [
+              "랜드마크",
+              "아침산책",
+              "인생샷"
+            ],
+            "imageUrl": "https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=500&auto=format&fit=crop"
+          },
+          {
+            "time": "오후 12:30",
+            "title": "추천 한식/현지식 소문난 맛집",
+            "description": "인근에서 가장 유명하고 후기가 극찬인 레스토랑에서 든든하게 점심 식사를 즐깁니다.",
+            "location": "ㅇㅇ 번화가",
+            "category": "맛집",
+            "tags": [
+              "현지맛집",
+              "미식탐방",
+              "강력추천"
+            ],
+            "imageUrl": "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=500&auto=format&fit=crop"
+          },
+          {
+            "time": "오후 02:30",
+            "title": "감성 가득한 로컬 스페셜티 카페",
+            "description": "스타일리시한 인테리어와 수제 디저트가 일품인 핫플레이스 카페에서 차 한잔을 기울이며 휴식을 누립니다.",
+            "location": "ㅇㅇ 골목 정취",
+            "category": "카페",
+            "tags": [
+              "감성카페",
+              "수제디저트",
+              "힐링"
+            ],
+            "imageUrl": "https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?w=500&auto=format&fit=crop"
+          },
+          {
+            "time": "오후 05:00",
+            "title": "쇼핑 스트리트 및 소품샵 구경",
+            "description": "로컬 소품과 한정판 기념품을 만나볼 수 있는 개성 넘치는 거리를 구경하며 지인들 선물을 마련합니다.",
+            "location": "ㅇㅇ 쇼핑 에비뉴",
+            "category": "쇼핑",
+            "tags": [
+              "쇼핑",
+              "기념품",
+              "거리탐방"
+            ],
+            "imageUrl": "https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=500&auto=format&fit=crop"
+          }
+        ]
+      },
+      {
+        "day": 5,
+        "theme": "ㅇㅇ에서의 특별한 하루 - 5일차",
+        "description": "ㅇㅇ의 핵심 하이라이트를 탐방하는 일차별 스마트 동선입니다.",
+        "activities": [
+          {
+            "time": "오전 09:30",
+            "title": "ㅇㅇ 인기 탐방 명소",
+            "description": "놓치고 싶지 않은 이 지역 최고의 랜드마크를 방문하여 아침 산책과 기념사진 촬영을 즐깁니다.",
+            "location": "ㅇㅇ 시내 중심가",
+            "category": "관광",
+            "mustVisit": false,
+            "tags": [
+              "랜드마크",
+              "아침산책",
+              "인생샷"
+            ],
+            "imageUrl": "https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=500&auto=format&fit=crop"
+          },
+          {
+            "time": "오후 12:30",
+            "title": "추천 한식/현지식 소문난 맛집",
+            "description": "인근에서 가장 유명하고 후기가 극찬인 레스토랑에서 든든하게 점심 식사를 즐깁니다.",
+            "location": "ㅇㅇ 번화가",
+            "category": "맛집",
+            "tags": [
+              "현지맛집",
+              "미식탐방",
+              "강력추천"
+            ],
+            "imageUrl": "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=500&auto=format&fit=crop"
+          },
+          {
+            "time": "오후 02:30",
+            "title": "감성 가득한 로컬 스페셜티 카페",
+            "description": "스타일리시한 인테리어와 수제 디저트가 일품인 핫플레이스 카페에서 차 한잔을 기울이며 휴식을 누립니다.",
+            "location": "ㅇㅇ 골목 정취",
+            "category": "카페",
+            "tags": [
+              "감성카페",
+              "수제디저트",
+              "힐링"
+            ],
+            "imageUrl": "https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?w=500&auto=format&fit=crop"
+          },
+          {
+            "time": "오후 05:00",
+            "title": "쇼핑 스트리트 및 소품샵 구경",
+            "description": "로컬 소품과 한정판 기념품을 만나볼 수 있는 개성 넘치는 거리를 구경하며 지인들 선물을 마련합니다.",
+            "location": "ㅇㅇ 쇼핑 에비뉴",
+            "category": "쇼핑",
+            "tags": [
+              "쇼핑",
+              "기념품",
+              "거리탐방"
+            ],
+            "imageUrl": "https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=500&auto=format&fit=crop"
+          }
+        ]
+      },
+      {
+        "day": 6,
+        "theme": "ㅇㅇ에서의 특별한 하루 - 6일차",
+        "description": "ㅇㅇ의 핵심 하이라이트를 탐방하는 일차별 스마트 동선입니다.",
+        "activities": [
+          {
+            "time": "오전 09:30",
+            "title": "ㅇㅇ 인기 탐방 명소",
+            "description": "놓치고 싶지 않은 이 지역 최고의 랜드마크를 방문하여 아침 산책과 기념사진 촬영을 즐깁니다.",
+            "location": "ㅇㅇ 시내 중심가",
+            "category": "관광",
+            "mustVisit": false,
+            "tags": [
+              "랜드마크",
+              "아침산책",
+              "인생샷"
+            ],
+            "imageUrl": "https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=500&auto=format&fit=crop"
+          },
+          {
+            "time": "오후 12:30",
+            "title": "추천 한식/현지식 소문난 맛집",
+            "description": "인근에서 가장 유명하고 후기가 극찬인 레스토랑에서 든든하게 점심 식사를 즐깁니다.",
+            "location": "ㅇㅇ 번화가",
+            "category": "맛집",
+            "tags": [
+              "현지맛집",
+              "미식탐방",
+              "강력추천"
+            ],
+            "imageUrl": "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=500&auto=format&fit=crop"
+          },
+          {
+            "time": "오후 02:30",
+            "title": "감성 가득한 로컬 스페셜티 카페",
+            "description": "스타일리시한 인테리어와 수제 디저트가 일품인 핫플레이스 카페에서 차 한잔을 기울이며 휴식을 누립니다.",
+            "location": "ㅇㅇ 골목 정취",
+            "category": "카페",
+            "tags": [
+              "감성카페",
+              "수제디저트",
+              "힐링"
+            ],
+            "imageUrl": "https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?w=500&auto=format&fit=crop"
+          },
+          {
+            "time": "오후 05:00",
+            "title": "쇼핑 스트리트 및 소품샵 구경",
+            "description": "로컬 소품과 한정판 기념품을 만나볼 수 있는 개성 넘치는 거리를 구경하며 지인들 선물을 마련합니다.",
+            "location": "ㅇㅇ 쇼핑 에비뉴",
+            "category": "쇼핑",
+            "tags": [
+              "쇼핑",
+              "기념품",
+              "거리탐방"
+            ],
+            "imageUrl": "https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=500&auto=format&fit=crop"
+          }
+        ]
+      },
+      {
+        "day": 7,
+        "theme": "ㅇㅇ에서의 특별한 하루 - 7일차",
+        "description": "ㅇㅇ의 핵심 하이라이트를 탐방하는 일차별 스마트 동선입니다.",
+        "activities": [
+          {
+            "time": "오전 09:30",
+            "title": "ㅇㅇ 인기 탐방 명소",
+            "description": "놓치고 싶지 않은 이 지역 최고의 랜드마크를 방문하여 아침 산책과 기념사진 촬영을 즐깁니다.",
+            "location": "ㅇㅇ 시내 중심가",
+            "category": "관광",
+            "mustVisit": false,
+            "tags": [
+              "랜드마크",
+              "아침산책",
+              "인생샷"
+            ],
+            "imageUrl": "https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=500&auto=format&fit=crop"
+          },
+          {
+            "time": "오후 12:30",
+            "title": "추천 한식/현지식 소문난 맛집",
+            "description": "인근에서 가장 유명하고 후기가 극찬인 레스토랑에서 든든하게 점심 식사를 즐깁니다.",
+            "location": "ㅇㅇ 번화가",
+            "category": "맛집",
+            "tags": [
+              "현지맛집",
+              "미식탐방",
+              "강력추천"
+            ],
+            "imageUrl": "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=500&auto=format&fit=crop"
+          },
+          {
+            "time": "오후 02:30",
+            "title": "감성 가득한 로컬 스페셜티 카페",
+            "description": "스타일리시한 인테리어와 수제 디저트가 일품인 핫플레이스 카페에서 차 한잔을 기울이며 휴식을 누립니다.",
+            "location": "ㅇㅇ 골목 정취",
+            "category": "카페",
+            "tags": [
+              "감성카페",
+              "수제디저트",
+              "힐링"
+            ],
+            "imageUrl": "https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?w=500&auto=format&fit=crop"
+          },
+          {
+            "time": "오후 05:00",
+            "title": "쇼핑 스트리트 및 소품샵 구경",
+            "description": "로컬 소품과 한정판 기념품을 만나볼 수 있는 개성 넘치는 거리를 구경하며 지인들 선물을 마련합니다.",
+            "location": "ㅇㅇ 쇼핑 에비뉴",
+            "category": "쇼핑",
+            "tags": [
+              "쇼핑",
+              "기념품",
+              "거리탐방"
+            ],
+            "imageUrl": "https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=500&auto=format&fit=crop"
+          }
+        ]
+      },
+      {
+        "day": 8,
+        "theme": "ㅇㅇ에서의 특별한 하루 - 8일차",
+        "description": "ㅇㅇ의 핵심 하이라이트를 탐방하는 일차별 스마트 동선입니다.",
+        "activities": [
+          {
+            "time": "오전 09:30",
+            "title": "ㅇㅇ 인기 탐방 명소",
+            "description": "놓치고 싶지 않은 이 지역 최고의 랜드마크를 방문하여 아침 산책과 기념사진 촬영을 즐깁니다.",
+            "location": "ㅇㅇ 시내 중심가",
+            "category": "관광",
+            "mustVisit": false,
+            "tags": [
+              "랜드마크",
+              "아침산책",
+              "인생샷"
+            ],
+            "imageUrl": "https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=500&auto=format&fit=crop"
+          },
+          {
+            "time": "오후 12:30",
+            "title": "추천 한식/현지식 소문난 맛집",
+            "description": "인근에서 가장 유명하고 후기가 극찬인 레스토랑에서 든든하게 점심 식사를 즐깁니다.",
+            "location": "ㅇㅇ 번화가",
+            "category": "맛집",
+            "tags": [
+              "현지맛집",
+              "미식탐방",
+              "강력추천"
+            ],
+            "imageUrl": "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=500&auto=format&fit=crop"
+          },
+          {
+            "time": "오후 02:30",
+            "title": "감성 가득한 로컬 스페셜티 카페",
+            "description": "스타일리시한 인테리어와 수제 디저트가 일품인 핫플레이스 카페에서 차 한잔을 기울이며 휴식을 누립니다.",
+            "location": "ㅇㅇ 골목 정취",
+            "category": "카페",
+            "tags": [
+              "감성카페",
+              "수제디저트",
+              "힐링"
+            ],
+            "imageUrl": "https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?w=500&auto=format&fit=crop"
+          },
+          {
+            "time": "오후 05:00",
+            "title": "쇼핑 스트리트 및 소품샵 구경",
+            "description": "로컬 소품과 한정판 기념품을 만나볼 수 있는 개성 넘치는 거리를 구경하며 지인들 선물을 마련합니다.",
+            "location": "ㅇㅇ 쇼핑 에비뉴",
+            "category": "쇼핑",
+            "tags": [
+              "쇼핑",
+              "기념품",
+              "거리탐방"
+            ],
+            "imageUrl": "https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=500&auto=format&fit=crop"
+          }
+        ]
+      }
+    ],
+    "userId": "user-google",
+    "createdAt": "2026-06-09T04:59:02.996Z",
+    "updatedAt": "2026-06-09T04:59:03.008Z",
+    "id": "plan-1780981143008-418v1cevy"
+  }
+]

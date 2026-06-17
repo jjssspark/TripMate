@@ -1,0 +1,6 @@
+{
+  "name": "TripMate AI",
+  "description": "AI 기술을 활용하여 사용자의 취향과 일정에 맞는 최적의 여행 계획을 설계하고 저장 및 관리해주는 스마트 AI 여행 플래너",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
