@@ -52,15 +52,21 @@ export default function App() {
     const client = getSupabaseClient();
     if (!client) return;
 
-    const { data: listener } = client.auth.onAuthStateChange(async (event, authSession) => {
-      if (authSession?.user) {
-        const userSession = await buildUserSession(client, authSession.user);
-        localStorage.setItem("tripmate_session", JSON.stringify(userSession));
-        setSession(userSession);
-      } else if (event === "SIGNED_OUT") {
-        localStorage.removeItem("tripmate_session");
-        setSession(null);
-      }
+    // 콜백을 async로 두면 Supabase의 내부 인증 락(lock)이 걸려 signOut() 등
+    // 이후의 auth 호출이 영원히 대기(deadlock)하는 문제가 있음 — 공식 가이드대로
+    // 콜백은 동기로 두고, 실제 비동기 작업은 setTimeout으로 다음 틱에 미룸
+    const { data: listener } = client.auth.onAuthStateChange((event, authSession) => {
+      setTimeout(() => {
+        if (authSession?.user) {
+          buildUserSession(client, authSession.user).then((userSession) => {
+            localStorage.setItem("tripmate_session", JSON.stringify(userSession));
+            setSession(userSession);
+          });
+        } else if (event === "SIGNED_OUT") {
+          localStorage.removeItem("tripmate_session");
+          setSession(null);
+        }
+      }, 0);
     });
 
     return () => listener.subscription.unsubscribe();
@@ -125,7 +131,11 @@ export default function App() {
   const handleLogout = async () => {
     const client = getSupabaseClient();
     if (client) {
-      await client.auth.signOut();
+      try {
+        await client.auth.signOut();
+      } catch (err) {
+        console.error("Supabase signOut failed. Clearing local session anyway:", err);
+      }
     }
     localStorage.removeItem("tripmate_session");
     setSession(null);

@@ -69,6 +69,10 @@ CREATE TABLE IF NOT EXISTS travel_items (
   sequence INT DEFAULT 0
 );
 
+-- RLS는 "행 단위" 필터일 뿐, 테이블 자체에 대한 기본 권한(GRANT)이 없으면
+-- authenticated 롤은 RLS 검사도 가기 전에 permission denied로 막힘
+GRANT SELECT, INSERT, UPDATE, DELETE ON profiles, users, travel_plans, travel_items TO authenticated;
+
 -- RLS 활성화 + 본인 데이터만 CRUD 가능하도록 정책 설정
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;
