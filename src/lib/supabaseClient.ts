@@ -4,7 +4,7 @@
  */
 
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
-import { TravelPlan, ItineraryDay } from "../types";
+import { TravelPlan, ItineraryDay, UserSession } from "../types";
 
 // Configuration keys in localStorage
 const URL_KEY = "tripmate_supabase_url";
@@ -61,6 +61,30 @@ export function getSupabaseClient(): SupabaseClient | null {
     console.error("Failed to initialize Supabase client:", err);
     return null;
   }
+}
+
+// Supabase Auth user(JWT 세션)로부터 앱이 쓰는 UserSession(user_seq 포함)을 조회해 구성
+// 로그인 폼과 onAuthStateChange(OAuth 콜백, 세션 복구) 양쪽에서 재사용
+export async function buildUserSession(
+  client: SupabaseClient,
+  authUser: { id: string; email?: string | null }
+): Promise<UserSession> {
+  const { data: userRow, error } = await client
+    .from("users")
+    .select("user_seq, name")
+    .eq("user_id", authUser.id)
+    .maybeSingle();
+
+  if (error) {
+    console.error("DB User mapping fetch failed:", error);
+  }
+
+  return {
+    id: authUser.id,
+    email: authUser.email || "",
+    name: userRow?.name || authUser.email?.split("@")[0] || "여행자",
+    userSeq: userRow?.user_seq ? Number(userRow.user_seq) : 1,
+  };
 }
 
 // Helper to choose corresponding high-quality mockup images for places (역사 이력 조회 시 활용)

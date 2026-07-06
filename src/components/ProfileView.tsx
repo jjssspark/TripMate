@@ -20,6 +20,97 @@ import {
   mapToSupabase,
 } from "../lib/supabaseClient";
 
+// 실제 supabaseClient.ts의 mapToSupabase/mapToSupabaseItem, LoginSignup.tsx의 쿼리가 사용하는
+// 컬럼과 정확히 일치하는 스키마. RLS는 auth.uid() 기준으로 본인 데이터만 CRUD 가능하도록 스코프.
+const TRAVEL_PLANS_SQL = `-- ✈️ TripMate AI - 데이터베이스 스키마 + RLS DDL
+-- 1. auth.users와 1:1 매핑되는 프로필
+CREATE TABLE IF NOT EXISTS profiles (
+  id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  full_name TEXT,
+  eamil TEXT,
+  avatar_url TEXT
+);
+
+-- 2. 앱 내부에서 쓰는 user_seq 매핑 테이블
+CREATE TABLE IF NOT EXISTS users (
+  user_seq BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  user_id UUID NOT NULL UNIQUE REFERENCES auth.users(id) ON DELETE CASCADE,
+  login_email TEXT,
+  name TEXT,
+  last_login_time TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 3. 여행 일정 관리 테이블 (travel_plans)
+CREATE TABLE IF NOT EXISTS travel_plans (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_seq BIGINT NOT NULL REFERENCES users(user_seq) ON DELETE CASCADE,
+  title TEXT NOT NULL,
+  destination TEXT NOT NULL,
+  start_date DATE NOT NULL,
+  end_date DATE NOT NULL,
+  budget TEXT,
+  companion TEXT,
+  styles TEXT[] DEFAULT '{}',
+  must_visit_places TEXT[] DEFAULT '{}',
+  is_shared BOOLEAN DEFAULT FALSE,
+  additional_requests TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 4. 일차별 세부 활동 테이블 (travel_items)
+CREATE TABLE IF NOT EXISTS travel_items (
+  id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  plan_id UUID NOT NULL REFERENCES travel_plans(id) ON DELETE CASCADE,
+  day_number INT NOT NULL,
+  visit_time TIME,
+  place_name TEXT NOT NULL,
+  description TEXT[] DEFAULT '{}',
+  category TEXT,
+  sequence INT DEFAULT 0
+);
+
+-- RLS 활성화 + 본인 데이터만 CRUD 가능하도록 정책 설정
+ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE travel_plans ENABLE ROW LEVEL SECURITY;
+ALTER TABLE travel_items ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "본인 프로필만 조회" ON profiles FOR SELECT USING (id = auth.uid());
+CREATE POLICY "본인 프로필만 생성" ON profiles FOR INSERT WITH CHECK (id = auth.uid());
+CREATE POLICY "본인 프로필만 수정" ON profiles FOR UPDATE USING (id = auth.uid());
+CREATE POLICY "본인 프로필만 삭제" ON profiles FOR DELETE USING (id = auth.uid());
+
+CREATE POLICY "본인 유저행만 조회" ON users FOR SELECT USING (user_id = auth.uid());
+CREATE POLICY "본인 유저행만 생성" ON users FOR INSERT WITH CHECK (user_id = auth.uid());
+CREATE POLICY "본인 유저행만 수정" ON users FOR UPDATE USING (user_id = auth.uid());
+CREATE POLICY "본인 유저행만 삭제" ON users FOR DELETE USING (user_id = auth.uid());
+
+CREATE POLICY "본인 일정만 조회" ON travel_plans FOR SELECT
+  USING (user_seq IN (SELECT user_seq FROM users WHERE user_id = auth.uid()));
+CREATE POLICY "본인 일정만 생성" ON travel_plans FOR INSERT
+  WITH CHECK (user_seq IN (SELECT user_seq FROM users WHERE user_id = auth.uid()));
+CREATE POLICY "본인 일정만 수정" ON travel_plans FOR UPDATE
+  USING (user_seq IN (SELECT user_seq FROM users WHERE user_id = auth.uid()));
+CREATE POLICY "본인 일정만 삭제" ON travel_plans FOR DELETE
+  USING (user_seq IN (SELECT user_seq FROM users WHERE user_id = auth.uid()));
+
+CREATE POLICY "본인 일정의 활동만 조회" ON travel_items FOR SELECT
+  USING (plan_id IN (
+    SELECT id FROM travel_plans WHERE user_seq IN (SELECT user_seq FROM users WHERE user_id = auth.uid())
+  ));
+CREATE POLICY "본인 일정의 활동만 생성" ON travel_items FOR INSERT
+  WITH CHECK (plan_id IN (
+    SELECT id FROM travel_plans WHERE user_seq IN (SELECT user_seq FROM users WHERE user_id = auth.uid())
+  ));
+CREATE POLICY "본인 일정의 활동만 수정" ON travel_items FOR UPDATE
+  USING (plan_id IN (
+    SELECT id FROM travel_plans WHERE user_seq IN (SELECT user_seq FROM users WHERE user_id = auth.uid())
+  ));
+CREATE POLICY "본인 일정의 활동만 삭제" ON travel_items FOR DELETE
+  USING (plan_id IN (
+    SELECT id FROM travel_plans WHERE user_seq IN (SELECT user_seq FROM users WHERE user_id = auth.uid())
+  ));`;
+
 interface ProfileViewProps {
   session: UserSession;
   onLogout: () => void;
@@ -114,45 +205,7 @@ export default function ProfileView({
   };
 
   const handleCopySql = () => {
-    const sql = `-- ✈️ TripMate AI - 휴먼3팀 설계 데이터베이스 스키마 ERD DDL
--- 1. 여행 일정 관리 테이블 (travel_plans)
-CREATE TABLE IF NOT EXISTS travel_plans (
-  id VARCHAR(255) PRIMARY KEY,
-  user_id VARCHAR(255) NOT NULL,
-  title VARCHAR(255) NOT NULL,
-  destination VARCHAR(255) NOT NULL,
-  start_date DATE NOT NULL,
-  end_date DATE NOT NULL,
-  duration VARCHAR(50) NOT NULL,
-  budget VARCHAR(50),
-  companion VARCHAR(50),
-  styles TEXT[] DEFAULT '{}',
-  must_visit_places TEXT,
-  plan_content JSONB DEFAULT '[]'::jsonb,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
--- RLS (Row Level Security) 설정 및 인증 우회 보안 정책 설정
-ALTER TABLE travel_plans ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "모든 인증된 익명 사용자의 읽기 허용" 
-  ON travel_plans FOR SELECT 
-  USING (true);
-
-CREATE POLICY "모든 사용자의 생성 허용" 
-  ON travel_plans FOR INSERT 
-  WITH CHECK (true);
-
-CREATE POLICY "모든 사용자의 편집 정책" 
-  ON travel_plans FOR UPDATE 
-  USING (true);
-
-CREATE POLICY "모든 사용자의 삭제 정책" 
-  ON travel_plans FOR DELETE 
-  USING (true);`;
-
-    navigator.clipboard.writeText(sql);
+    navigator.clipboard.writeText(TRAVEL_PLANS_SQL);
     setSqlCopied(true);
     setTimeout(() => {
       setSqlCopied(false);
@@ -457,32 +510,7 @@ CREATE POLICY "모든 사용자의 삭제 정책"
               </div>
 
               <pre className="bg-slate-950 text-emerald-400 text-[10px] sm:text-xs font-mono p-4 rounded-xl overflow-x-auto select-all h-48 border border-slate-800">
-                {`-- ✈️ TripMate AI - 휴먼3팀 설계 데이터베이스 스키마 ERD DDL
--- 1. 여행 일정 관리 테이블 (travel_plans)
-CREATE TABLE IF NOT EXISTS travel_plans (
-  id VARCHAR(255) PRIMARY KEY,
-  user_id VARCHAR(255) NOT NULL,
-  title VARCHAR(255) NOT NULL,
-  destination VARCHAR(255) NOT NULL,
-  start_date DATE NOT NULL,
-  end_date DATE NOT NULL,
-  duration VARCHAR(50) NOT NULL,
-  budget VARCHAR(50),
-  companion VARCHAR(50),
-  styles TEXT[] DEFAULT '{}',
-  must_visit_places TEXT,
-  plan_content JSONB DEFAULT '[]'::jsonb,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
--- RLS (Row Level Security) 설정 및 인증 우회 보안 정책 설정
-ALTER TABLE travel_plans ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "모든 인증된 익명 사용자의 읽기 허용" ON travel_plans FOR SELECT USING (true);
-CREATE POLICY "모든 사용자의 생성 허용" ON travel_plans FOR INSERT WITH CHECK (true);
-CREATE POLICY "모든 사용자의 편집 정책" ON travel_plans FOR UPDATE USING (true);
-CREATE POLICY "모든 사용자의 삭제 정책" ON travel_plans FOR DELETE USING (true);`}
+                {TRAVEL_PLANS_SQL}
               </pre>
             </div>
           </div>

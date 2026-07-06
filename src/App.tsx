@@ -17,6 +17,7 @@ import { SearchIcon, LocationIcon, BookmarkIcon } from "./components/Icons";
 import {
   getSupabaseConfig,
   getSupabaseClient,
+  buildUserSession,
   mapFromSupabase,
   mapToSupabase,
   mapToSupabaseItem,
@@ -29,7 +30,7 @@ export default function App() {
   const [activePlan, setActivePlan] = useState<TravelPlan | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
 
-  // Retrieve user session and fetch plans on load
+  // Retrieve user session and fetch plans on load (Mock 모드 폴백)
   useEffect(() => {
     const stored = localStorage.getItem("tripmate_session");
     if (stored) {
@@ -40,6 +41,29 @@ export default function App() {
         console.error("Error parsing stored session:", err);
       }
     }
+  }, []);
+
+  // Supabase Auth 세션 구독: 새로고침 시 세션 복구, 토큰 자동 갱신,
+  // 그리고 소셜 로그인(OAuth) 리다이렉트 이후 세션을 실제로 반영하기 위한 리스너
+  useEffect(() => {
+    const config = getSupabaseConfig();
+    if (!config.active) return;
+
+    const client = getSupabaseClient();
+    if (!client) return;
+
+    const { data: listener } = client.auth.onAuthStateChange(async (event, authSession) => {
+      if (authSession?.user) {
+        const userSession = await buildUserSession(client, authSession.user);
+        localStorage.setItem("tripmate_session", JSON.stringify(userSession));
+        setSession(userSession);
+      } else if (event === "SIGNED_OUT") {
+        localStorage.removeItem("tripmate_session");
+        setSession(null);
+      }
+    });
+
+    return () => listener.subscription.unsubscribe();
   }, []);
 
   // Fetch plans from either Supabase Cloud or Local fallback backend storage
@@ -98,7 +122,11 @@ export default function App() {
     setActiveTab("home");
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    const client = getSupabaseClient();
+    if (client) {
+      await client.auth.signOut();
+    }
     localStorage.removeItem("tripmate_session");
     setSession(null);
     setActiveTab("home");
