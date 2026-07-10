@@ -5,6 +5,7 @@
 
 import { TravelPlan, UserSession } from "../types";
 import { PlusCircleIcon } from "./Icons";
+import { getPlanCoverImage } from "../lib/planDisplay";
 
 interface HomeDashboardProps {
   session: UserSession;
@@ -104,10 +105,8 @@ export default function HomeDashboard({
         {recentPlans.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             {recentPlans.map((plan) => {
-              // Extract the first activity for card image background
-              const displayImage =
-                plan.planContent?.[0]?.activities?.[0]?.imageUrl ||
-                "https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=500&auto=format&fit=crop";
+              // 코스에서 가장 네임드(랜드마크격)인 필수 방문 장소 사진을 대표 썸네일로 사용
+              const displayImage = getPlanCoverImage(plan);
 
               const primaryStyle = plan.styles?.[0] || "자유 여행";
 
@@ -121,6 +120,8 @@ export default function HomeDashboard({
                     <img
                       alt={plan.destination}
                       src={displayImage}
+                      loading="lazy"
+                      decoding="async"
                       className="w-full h-full object-cover group-hover:scale-102 transition-transform duration-500"
                     />
                     <div className="absolute top-4 left-4">
@@ -194,6 +195,8 @@ export default function HomeDashboard({
                 alt={place.name}
                 className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                 src={place.imgUrl}
+                loading="lazy"
+                decoding="async"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent"></div>
               <div className="absolute bottom-4 left-3 right-3 text-white flex flex-col justify-end">

@@ -15,6 +15,8 @@ export interface ItineraryActivity {
   tags?: string[];
   latitude?: number;
   longitude?: number;
+  isMeal?: boolean;
+  mealType?: "아침" | "점심" | "저녁" | string;
 }
 
 export interface ItineraryDay {
@@ -35,11 +37,13 @@ export interface TravelPlan {
   duration: string;
   budget: string;
   companion: string;
+  intensity?: "여유롭게" | "빡빡하게" | string;
   styles: string[];
   mustVisitPlaces: string;
   planContent: ItineraryDay[];
   createdAt: string;
   updatedAt: string;
+  isShared?: boolean;
 }
 
 export interface UserSession {

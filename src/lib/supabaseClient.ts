@@ -79,11 +79,43 @@ export async function buildUserSession(
     console.error("DB User mapping fetch failed:", error);
   }
 
+  if (userRow) {
+    return {
+      id: authUser.id,
+      email: authUser.email || "",
+      name: userRow.name || authUser.email?.split("@")[0] || "여행자",
+      userSeq: Number(userRow.user_seq),
+    };
+  }
+
+  // users 테이블에 이 인증 사용자의 행이 아직 없는 경우 (예: 소셜 로그인은 회원가입 폼을
+  // 거치지 않아 users insert가 한 번도 실행되지 않음) 여기서 직접 생성한다.
+  // travel_plans 등의 RLS INSERT 정책은 "user_seq가 이 auth.uid()의 users 행에 속하는지"를
+  // 검사하므로, 이 행이 없으면 이후 모든 저장이 user_seq 불일치로 막히게 된다.
+  const fallbackName = authUser.email?.split("@")[0] || "여행자";
+  const { data: newUserRow, error: upsertErr } = await client
+    .from("users")
+    .upsert(
+      {
+        user_id: authUser.id,
+        login_email: authUser.email || "",
+        name: fallbackName,
+        last_login_time: new Date().toISOString(),
+      },
+      { onConflict: "user_id" }
+    )
+    .select("user_seq, name")
+    .single();
+
+  if (upsertErr) {
+    console.error("Failed to create missing users row:", upsertErr);
+  }
+
   return {
     id: authUser.id,
     email: authUser.email || "",
-    name: userRow?.name || authUser.email?.split("@")[0] || "여행자",
-    userSeq: userRow?.user_seq ? Number(userRow.user_seq) : 1,
+    name: newUserRow?.name || fallbackName,
+    userSeq: newUserRow?.user_seq ? Number(newUserRow.user_seq) : 1,
   };
 }
 
@@ -188,8 +220,9 @@ export function mapFromSupabase(row: any): TravelPlan {
       description: `${item.place_name}에서 특별하고 행복한 시간을 만끽해 보세요!`,
       location: item.place_name,
       category: cat,
-      imageUrl: getMockupImage(cat, row.destination, idx), // 역사 이력 로딩 시 장소 이미지 복원 매핑
-      mustVisit: false,
+      // 생성 당시 저장해둔 실제 장소 사진(image_url)이 있으면 그대로 복원하고, 없으면(과거 저장분) 목업 이미지로 대체
+      imageUrl: item.image_url || getMockupImage(cat, row.destination, idx),
+      mustVisit: !!item.is_must_visit,
       // DB의 description 칼럼에 저장되어 있던 text[] 태그 배열을 tags로 완벽 복원
       tags: Array.isArray(item.description) ? item.description : (item.category ? [item.category] : [])
     });
@@ -234,12 +267,13 @@ export function mapFromSupabase(row: any): TravelPlan {
     planContent: planContent,
     createdAt: row.created_at,
     updatedAt: row.created_at,
+    isShared: !!row.is_shared,
   };
 }
 
 export function mapToSupabase(plan: TravelPlan): any {
   const mustVisitArr = plan.mustVisitPlaces ? plan.mustVisitPlaces.split(",").map(s => s.trim()).filter(Boolean) : [];
-  
+
   return {
     id: plan.id,
     user_seq: plan.userSeq,
@@ -251,9 +285,49 @@ export function mapToSupabase(plan: TravelPlan): any {
     companion: plan.companion,
     styles: plan.styles,
     must_visit_places: mustVisitArr,
-    is_shared: false,
+    // 최초 저장 시엔 비공개(false)가 기본. 이미 공유 설정된 일정을 수정 저장할 때 값이
+    // 다시 false로 덮어써지지 않도록 plan.isShared를 그대로 반영한다.
+    is_shared: plan.isShared ?? false,
     additional_requests: plan.planContent?.[0]?.description || "", // 대략적 개요 바인딩
   };
+}
+
+// 일정 공개/비공개 토글 — "공유하기" 클릭 시 해당 일정만 anon(비로그인) 열람이 가능하도록 전환
+export async function setPlanShared(planId: string, shared: boolean): Promise<boolean> {
+  const client = getSupabaseClient();
+  if (!client) return false;
+
+  const { error } = await client
+    .from("travel_plans")
+    .update({ is_shared: shared })
+    .eq("id", planId);
+
+  if (error) {
+    console.error("Failed to update is_shared flag:", error);
+    return false;
+  }
+  return true;
+}
+
+// 공개 공유 링크(/trip/:id)에서 사용 — 로그인 세션 없이 anon 키로 조회하며,
+// is_shared=true인 일정만 RLS 정책(anon SELECT)을 통과해 반환됨
+export async function fetchPublicPlan(planId: string): Promise<TravelPlan | null> {
+  const client = getSupabaseClient();
+  if (!client) return null;
+
+  const { data, error } = await client
+    .from("travel_plans")
+    .select("*, travel_items(*)")
+    .eq("id", planId)
+    .eq("is_shared", true)
+    .maybeSingle();
+
+  if (error || !data) {
+    if (error) console.error("Failed to fetch public plan:", error);
+    return null;
+  }
+
+  return mapFromSupabase(data);
 }
 
 export function mapToSupabaseItem(act: any, planId: string, dayNumber: number, sequence: number): any {
@@ -283,6 +357,10 @@ export function mapToSupabaseItem(act: any, planId: string, dayNumber: number, s
     description: Array.isArray(act.tags) ? act.tags : (act.category ? [act.category] : []),
     category: act.category,
     sequence: sequence,
+    // 필수 방문(랜드마크) 여부와 생성 당시 실제 장소 사진 URL을 보존 — 저장된 일정을 다시 불러올 때
+    // 대표 썸네일을 "가장 네임드인 장소" 사진으로 정확히 복원하기 위해 필요
+    is_must_visit: !!act.mustVisit,
+    image_url: act.imageUrl || null,
   };
 }
 

@@ -4,26 +4,40 @@
  */
 
 import { UserSession } from "../types";
-import { ExploreIcon, PersonIcon, BellIcon } from "./Icons";
+import { ExploreIcon, PersonIcon, BellIcon, ArrowLeftIcon } from "./Icons";
 
 interface NavbarProps {
   session: UserSession | null;
   activeTab: string;
   setActiveTab: (tab: string) => void;
   onLogout: () => void;
+  canGoBack?: boolean;
+  onBack?: () => void;
 }
 
-export default function Navbar({ session, activeTab, setActiveTab }: NavbarProps) {
+export default function Navbar({ session, activeTab, setActiveTab, canGoBack, onBack }: NavbarProps) {
   return (
     <header className="bg-white/90 backdrop-blur-md flex justify-between items-center px-6 w-full h-16 fixed top-0 z-40 border-b border-surface-variant select-none">
-      <div 
-        onClick={() => setActiveTab("home")} 
-        className="flex items-center gap-2 cursor-pointer select-none active:scale-95 transition-all"
-      >
-        <ExploreIcon className="text-primary w-8 h-8 fill-primary/10" />
-        <h1 className="text-xl font-extrabold text-black tracking-tight font-headline-lg">
-          TripMate AI
-        </h1>
+      <div className="flex items-center gap-3">
+        {/* 앱 전용 뒤로가기 버튼: planner/plan_result처럼 하위 플로우에 있을 때만 노출 */}
+        {canGoBack && onBack && (
+          <button
+            onClick={onBack}
+            aria-label="뒤로가기"
+            className="w-9 h-9 flex items-center justify-center rounded-full text-on-surface-variant hover:bg-surface-container hover:text-primary bg-transparent border-0 cursor-pointer active:scale-90 transition-all"
+          >
+            <ArrowLeftIcon className="w-5 h-5" />
+          </button>
+        )}
+        <div
+          onClick={() => setActiveTab("home")}
+          className="flex items-center gap-2 cursor-pointer select-none active:scale-95 transition-all"
+        >
+          <ExploreIcon className="text-primary w-8 h-8 fill-primary/10" />
+          <h1 className="text-xl font-extrabold text-black tracking-tight font-headline-lg">
+            TripMate AI
+          </h1>
+        </div>
       </div>
 
       {session ? (

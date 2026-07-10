@@ -21,15 +21,34 @@ export default function PlannerFlow({ onPlanGenerated }: PlannerFlowProps) {
   const [startDate, setStartDate] = useState("2026-06-10");
   const [endDate, setEndDate] = useState("2026-06-12");
   const [companion, setCompanion] = useState("혼자");
-  
+
+  // 인기 여행지 자동완성 드롭다운
+  const [showDestSuggestions, setShowDestSuggestions] = useState(false);
+
   // Preference styles (multiple select)
   const [styles, setStyles] = useState<string[]>(["맛집", "자연"]);
   const [tagInput, setTagInput] = useState("");
   const [mustVisitPlaces, setMustVisitPlaces] = useState<string[]>(["성심당", "한밭수목원"]);
   const [budget, setBudget] = useState("표준형");
+  const [intensity, setIntensity] = useState("여유롭게");
 
   // Extra details
   const [comments, setComments] = useState("넉넉한 여행 스케쥴");
+
+  const popularDestinations = [
+    "서울", "부산", "제주도", "강릉", "여수", "경주",
+    "도쿄", "오사카", "후쿠오카", "삿포로",
+    "파리", "방콕", "다낭", "시드니"
+  ];
+
+  const filteredDestinations = popularDestinations.filter(
+    (d) => d.includes(destination.trim()) && d !== destination.trim()
+  );
+
+  const handleSelectDestination = (name: string) => {
+    setDestination(name);
+    setShowDestSuggestions(false);
+  };
 
   const companions = [
     { label: "혼자", icon: "person" },
@@ -80,6 +99,7 @@ export default function PlannerFlow({ onPlanGenerated }: PlannerFlowProps) {
       endDate,
       companion,
       budget,
+      intensity,
       styles,
       mustVisitPlaces: mustVisitPlaces.join(", "),
       comments
@@ -200,7 +220,7 @@ export default function PlannerFlow({ onPlanGenerated }: PlannerFlowProps) {
             </div>
 
             {/* Field: Destination */}
-            <div className="space-y-1.5">
+            <div className="relative space-y-1.5">
               <label className="block font-label-md text-on-surface-variant ml-1 text-xs" htmlFor="destination">
                 목적지
               </label>
@@ -213,11 +233,33 @@ export default function PlannerFlow({ onPlanGenerated }: PlannerFlowProps) {
                   type="text"
                   value={destination}
                   onChange={(e) => setDestination(e.target.value)}
+                  onFocus={() => setShowDestSuggestions(true)}
+                  onBlur={() => setTimeout(() => setShowDestSuggestions(false), 150)}
+                  autoComplete="off"
                   className="w-full bg-transparent border-none py-4 pl-12 pr-4 rounded-xl focus:ring-0 text-on-surface font-body-md placeholder:text-outline-variant outline-none"
                   placeholder="도시 또는 국가를 입력하세요 (예: 도쿄, 제주도 등)"
                   required
                 />
               </div>
+
+              {/* 인기 여행지 자동완성 드롭다운 */}
+              {showDestSuggestions && filteredDestinations.length > 0 && (
+                <ul className="absolute left-0 right-0 top-full mt-1.5 z-30 bg-white border border-outline-variant/50 rounded-xl shadow-lg overflow-hidden">
+                  {filteredDestinations.map((name) => (
+                    <li key={name}>
+                      <button
+                        type="button"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => handleSelectDestination(name)}
+                        className="w-full flex items-center gap-2 px-4 py-2.5 text-left text-sm text-on-surface hover:bg-primary/5 border-none bg-transparent cursor-pointer"
+                      >
+                        <LocationIcon className="w-4 h-4 text-outline shrink-0" />
+                        {name}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
 
             {/* Field: Dates */}
@@ -351,6 +393,44 @@ export default function PlannerFlow({ onPlanGenerated }: PlannerFlowProps) {
                         {lvl === "절약형" ? icons.절약형 : lvl === "표준형" ? icons.표준형 : icons.고급형}
                       </span>
                       <span className="font-label-sm text-xs">{lvl}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Field: Travel Intensity (하루 스팟 개수) */}
+            <div className="space-y-3 pt-2">
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-primary text-xl font-bold">
+                  speed
+                </span>
+                <h3 className="font-headline-md text-base leading-6 font-bold">여행 강도</h3>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                {[
+                  { label: "여유롭게", desc: "하루 3곳 (식사 제외)", icon: "self_improvement" },
+                  { label: "빡빡하게", desc: "하루 5곳 (식사 제외)", icon: "directions_run" }
+                ].map((opt) => {
+                  const isActive = intensity === opt.label;
+                  return (
+                    <button
+                      key={opt.label}
+                      type="button"
+                      onClick={() => setIntensity(opt.label)}
+                      className={`flex flex-col items-center gap-1.5 p-4 rounded-xl border transition-all active:scale-95 cursor-pointer ${
+                        isActive
+                          ? "bg-slate-900 border-slate-900 text-white font-bold"
+                          : "border-outline-variant bg-surface-container-lowest text-on-surface-variant hover:border-slate-400"
+                      }`}
+                    >
+                      <span className="material-symbols-outlined text-2xl flex items-center justify-center">
+                        {opt.icon}
+                      </span>
+                      <span className="font-label-sm text-xs">{opt.label}</span>
+                      <span className={`text-[10px] ${isActive ? "text-white/80" : "text-outline"}`}>
+                        {opt.desc}
+                      </span>
                     </button>
                   );
                 })}

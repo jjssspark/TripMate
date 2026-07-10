@@ -7,6 +7,7 @@ import React from "react";
 import { TravelPlan, UserSession } from "../types";
 import { TrashIcon, ShareIcon, LocationIcon } from "./Icons";
 import { getSupabaseConfig } from "../lib/supabaseClient";
+import { getPlanCoverImage } from "../lib/planDisplay";
 
 interface MyTripsViewProps {
   session: UserSession;
@@ -92,10 +93,8 @@ export default function MyTripsView({
       {plans.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {plans.map((plan) => {
-            // First activity image fallback
-            const displayImage =
-              plan.planContent?.[0]?.activities?.[0]?.imageUrl ||
-              "https://images.unsplash.com/photo-1501785888041-af3ef285b470?w=500&auto=format&fit=crop";
+            // 코스에서 가장 네임드(랜드마크격)인 필수 방문 장소 사진을 대표 썸네일로 사용
+            const displayImage = getPlanCoverImage(plan);
 
             return (
               <div
@@ -108,6 +107,8 @@ export default function MyTripsView({
                   <img
                     alt={plan.destination}
                     src={displayImage}
+                    loading="lazy"
+                    decoding="async"
                     className="w-full h-full object-cover group-hover:scale-102 transition-transform duration-500"
                   />
                   
@@ -149,11 +150,23 @@ export default function MyTripsView({
                     <h4 className="text-base font-extrabold text-on-surface mb-1 group-hover:text-primary transition-colors truncate">
                       {plan.title}
                     </h4>
-                    <p className="text-xs text-on-surface-variant mb-4 flex items-center gap-1.5 font-medium leading-relaxed">
+                    <p className="text-xs text-on-surface-variant mb-1.5 flex items-center gap-1.5 font-medium leading-relaxed">
                       <span className="material-symbols-outlined text-[15px] text-outline flex items-center justify-center font-bold">
                         calendar_today
                       </span>
                       {plan.startDate.replace(/-/g, ".")} - {plan.endDate.replace(/-/g, ".")} ({plan.duration})
+                    </p>
+                    <p className="text-[11px] text-outline mb-4 flex items-center gap-3 font-semibold">
+                      <span className="flex items-center gap-1">
+                        <span className="material-symbols-outlined text-[13px] flex items-center justify-center">group</span>
+                        {plan.companion}
+                      </span>
+                      {plan.createdAt && (
+                        <span className="flex items-center gap-1">
+                          <span className="material-symbols-outlined text-[13px] flex items-center justify-center">bookmark_added</span>
+                          {new Date(plan.createdAt).toISOString().split("T")[0].replace(/-/g, ".")} 저장
+                        </span>
+                      )}
                     </p>
                   </div>
 

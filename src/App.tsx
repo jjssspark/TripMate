@@ -4,6 +4,7 @@
  */
 
 import { useState, useEffect } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { UserSession, TravelPlan } from "./types";
 import Navbar from "./components/Navbar";
 import BottomNav from "./components/BottomNav";
@@ -13,6 +14,7 @@ import PlannerFlow from "./components/PlannerFlow";
 import PlanResultView from "./components/PlanResultView";
 import MyTripsView from "./components/MyTripsView";
 import ProfileView from "./components/ProfileView";
+import Toast from "./components/Toast";
 import { SearchIcon, LocationIcon, BookmarkIcon } from "./components/Icons";
 import {
   getSupabaseConfig,
@@ -25,10 +27,20 @@ import {
 
 export default function App() {
   const [session, setSession] = useState<UserSession | null>(null);
-  const [activeTab, setActiveTab] = useState<string>("home");
-  const [savedPlans, setSavedPlans] = useState<TravelPlan[]>([]);
+  // 탭 히스토리 스택: 하단 메인 탭(home/my_trips/search/profile)은 형제 탭 전환이라 스택을 초기화하고,
+  // planner/plan_result 같은 하위 플로우 화면은 스택에 쌓아서 뒤로가기로 이전 화면에 돌아갈 수 있게 함
+  const [navStack, setNavStack] = useState<string[]>(["home"]);
+  const activeTab = navStack[navStack.length - 1];
+  const goToTab = (tab: string) => setNavStack([tab]);
+  const pushScreen = (tab: string) => setNavStack((prev) => [...prev, tab]);
+  const goBack = () => setNavStack((prev) => (prev.length > 1 ? prev.slice(0, -1) : prev));
   const [activePlan, setActivePlan] = useState<TravelPlan | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
+
+  const showToast = (message: string, type: "success" | "error") => {
+    setToast({ message, type });
+  };
 
   // Retrieve user session and fetch plans on load (Mock 모드 폴백)
   useEffect(() => {
@@ -72,12 +84,13 @@ export default function App() {
     return () => listener.subscription.unsubscribe();
   }, []);
 
-  // Fetch plans from either Supabase Cloud or Local fallback backend storage
-  const loadPlans = async (currentSession = session) => {
-    if (!currentSession) {
-      setSavedPlans([]);
-      return;
-    }
+  const queryClient = useQueryClient();
+
+  // 내 여행 목록 조회: Supabase Cloud 우선 조회, 실패 시 로컬 브라우저 저장소로 폴백.
+  // React Query가 세션별로 결과를 캐싱하므로, 탭을 오가도 재요청 없이 이전 데이터를 즉시 보여준다
+  // (staleTime 1분 동안은 재요청 생략 — main.tsx의 QueryClient 기본값).
+  const fetchTravelPlans = async (): Promise<TravelPlan[]> => {
+    if (!session) return [];
 
     const config = getSupabaseConfig();
     if (config.active) {
@@ -88,14 +101,13 @@ export default function App() {
           const { data, error } = await client
             .from("travel_plans")
             .select("*, travel_items(*)")
-            .eq("user_seq", currentSession.userSeq || 1)
+            .eq("user_seq", session.userSeq || 1)
             .order("created_at", { ascending: false });
 
           if (error) throw error;
           if (data) {
-            setSavedPlans(data.map(mapFromSupabase));
             console.log("Plans sync-loaded from Supabase Cloud with relational items.");
-            return;
+            return data.map(mapFromSupabase);
           }
         }
       } catch (err) {
@@ -107,25 +119,22 @@ export default function App() {
     try {
       const storedPlans = localStorage.getItem("tripmate_local_plans");
       const allPlans = storedPlans ? JSON.parse(storedPlans) : [];
-      const userPlans = allPlans.filter((p: any) => p.userId === currentSession.id);
-      setSavedPlans(userPlans);
+      return allPlans.filter((p: any) => p.userId === session.id);
     } catch (err) {
       console.error("Error reading saved plans from localStorage:", err);
+      return [];
     }
   };
 
-  // Fetch plans when session changes
-  useEffect(() => {
-    if (session) {
-      loadPlans(session);
-    } else {
-      setSavedPlans([]);
-    }
-  }, [session]);
+  const { data: savedPlans = [] } = useQuery({
+    queryKey: ["travel-plans", session?.id],
+    queryFn: fetchTravelPlans,
+    enabled: !!session,
+  });
 
   const handleLoginSuccess = (user: UserSession) => {
     setSession(user);
-    setActiveTab("home");
+    goToTab("home");
   };
 
   const handleLogout = async () => {
@@ -139,31 +148,27 @@ export default function App() {
     }
     localStorage.removeItem("tripmate_session");
     setSession(null);
-    setActiveTab("home");
+    goToTab("home");
     setActivePlan(null);
   };
 
-  // 1. Create Travel Plan (일정 생성 즉시 데이터베이스 자동 저장 연동)
-  const handlePlanGenerated = async (plan: TravelPlan) => {
+  // 1. Create Travel Plan (생성 결과만 화면에 표시 — 저장은 사용자가 "이 일정 저장하기" 버튼을 눌러야 실행됨)
+  const handlePlanGenerated = (plan: TravelPlan) => {
     if (session) {
       plan.userId = session.id;
       plan.userSeq = session.userSeq || 1;
-      
-      // 생성 완료 시 즉각 Supabase DB에 인서트 트랜잭션 수행
-      await handleSaveToMyPage(plan);
     } else {
       plan.userId = "user-123";
     }
 
-    // DB 자동 저장 완료 후 생성된 플랜 결과를 화면에 즉시 바인딩 및 노출시킵니다.
     setActivePlan(plan);
-    setActiveTab("plan_result");
+    pushScreen("plan_result");
   };
 
-  // 2. Save Plan to Database (Gwak Jin-ah's backend saving requirement)
+  // 2. Save Plan to Database ("이 일정 저장하기" 버튼 클릭 시에만 호출됨)
   const handleSaveToMyPage = async (plan: TravelPlan) => {
     if (!session) return;
-    
+
     const completePlan = {
       ...plan,
       userId: session.id,
@@ -172,13 +177,15 @@ export default function App() {
       updatedAt: new Date().toISOString(),
     };
 
+    let supabaseSaveFailed = false;
+
     const config = getSupabaseConfig();
     if (config.active) {
       try {
         const client = getSupabaseClient();
         if (client) {
           const payload = mapToSupabase(completePlan);
-          
+
           // 1단계: travel_plans 마스터 삽입 및 자동 생성된 id 획득
           const { data: insertedPlan, error: planErr } = await client
             .from("travel_plans")
@@ -202,7 +209,7 @@ export default function App() {
             const { error: itemsErr } = await client
               .from("travel_items")
               .insert(itemsPayload);
-              
+
             if (itemsErr) {
               // 아이템 삽입 실패 시 데이터 정합성을 위해 마스터 레코드 롤백 삭제
               await client.from("travel_plans").delete().eq("id", insertedPlan.id);
@@ -215,20 +222,25 @@ export default function App() {
             id: insertedPlan.id
           };
 
-          setSavedPlans([finalPlanData, ...savedPlans]);
-          // 저장 후 강제 탭 이동 및 얼럿 팝업을 제거하여 생성 결과를 즉시 노출하도록 보장합니다.
+          queryClient.setQueryData<TravelPlan[]>(["travel-plans", session.id], (old = []) => [
+            finalPlanData,
+            ...old,
+          ]);
+          setActivePlan(finalPlanData);
+          showToast("일정이 보관함에 저장되었습니다!", "success");
+          goToTab("my_trips");
           return;
         }
       } catch (err: any) {
-        console.error("Failed to save to Supabase. Attempting local api fallback.", err);
-        alert(`Supabase 저장 중 오류 발견: ${err.message || err}. 로컬 파일스토리지 백업 저장을 시도합니다.`);
+        console.error("Failed to save to Supabase. Attempting local fallback.", err);
+        supabaseSaveFailed = true;
       }
     }
 
     try {
       const storedPlans = localStorage.getItem("tripmate_local_plans");
       const allPlans = storedPlans ? JSON.parse(storedPlans) : [];
-      
+
       // Ensure unique ID if not generated
       if (!completePlan.id) {
         completePlan.id = `plan-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -238,12 +250,22 @@ export default function App() {
       allPlans.push(completePlan);
       localStorage.setItem("tripmate_local_plans", JSON.stringify(allPlans));
 
-      setSavedPlans([completePlan, ...savedPlans]);
-      alert("성공적으로 보관함(마이페이지)에 일정이 저장되었습니다!");
-      setActiveTab("my_trips");
+      queryClient.setQueryData<TravelPlan[]>(["travel-plans", session.id], (old = []) => [
+        completePlan,
+        ...old,
+      ]);
+      setActivePlan(completePlan);
+
+      // Supabase 저장이 실패해 로컬로만 대체 저장된 경우, 클라우드 미동기화 사실을 사용자에게 고지
+      if (supabaseSaveFailed) {
+        showToast("클라우드 저장에 실패해 이 기기에만 임시 저장되었습니다.", "error");
+      } else {
+        showToast("일정이 보관함에 저장되었습니다!", "success");
+      }
+      goToTab("my_trips");
     } catch (err) {
       console.error("Error saving plan to localStorage:", err);
-      alert("일정 저장 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.");
+      showToast("일정 저장에 실패했습니다. 잠시 후 다시 시도해 주세요.", "error");
     }
   };
 
@@ -294,7 +316,9 @@ export default function App() {
             if (insErr) throw insErr;
           }
 
-          setSavedPlans(savedPlans.map((p) => (p.id === plan.id ? updatedPlan : p)));
+          queryClient.setQueryData<TravelPlan[]>(["travel-plans", session?.id], (old = []) =>
+            old.map((p) => (p.id === plan.id ? updatedPlan : p))
+          );
           console.log("Updated plan in Supabase relational tables successfully.");
           return;
         }
@@ -315,7 +339,9 @@ export default function App() {
       }
       
       localStorage.setItem("tripmate_local_plans", JSON.stringify(allPlans));
-      setSavedPlans(savedPlans.map((p) => (p.id === updatedPlan.id ? updatedPlan : p)));
+      queryClient.setQueryData<TravelPlan[]>(["travel-plans", session?.id], (old = []) =>
+        old.map((p) => (p.id === updatedPlan.id ? updatedPlan : p))
+      );
     } catch (err) {
       console.error("Error updating plan in localStorage:", err);
       throw err;
@@ -345,10 +371,12 @@ export default function App() {
 
           if (planDelErr) throw planDelErr;
 
-          setSavedPlans(savedPlans.filter((p) => p.id !== id));
+          queryClient.setQueryData<TravelPlan[]>(["travel-plans", session?.id], (old = []) =>
+            old.filter((p) => p.id !== id)
+          );
           if (activePlan?.id === id) {
             setActivePlan(null);
-            setActiveTab("my_trips");
+            goToTab("my_trips");
           }
           console.log("Deleted plan in Supabase relational tables successfully.");
           return;
@@ -366,10 +394,12 @@ export default function App() {
       const filtered = allPlans.filter((p: any) => p.id !== id);
       localStorage.setItem("tripmate_local_plans", JSON.stringify(filtered));
 
-      setSavedPlans(savedPlans.filter((p) => p.id !== id));
+      queryClient.setQueryData<TravelPlan[]>(["travel-plans", session?.id], (old = []) =>
+        old.filter((p) => p.id !== id)
+      );
       if (activePlan?.id === id) {
         setActivePlan(null);
-        setActiveTab("my_trips");
+        goToTab("my_trips");
       }
     } catch (err) {
       console.error("Error deleting plan from localStorage:", err);
@@ -379,7 +409,7 @@ export default function App() {
 
   const handleViewPlanDetails = (plan: TravelPlan) => {
     setActivePlan(plan);
-    setActiveTab("plan_result");
+    pushScreen("plan_result");
   };
 
   // Helper template locations for direct search inputs
@@ -396,8 +426,10 @@ export default function App() {
       <Navbar
         session={session}
         activeTab={activeTab}
-        setActiveTab={setActiveTab}
+        setActiveTab={goToTab}
         onLogout={handleLogout}
+        canGoBack={navStack.length > 1}
+        onBack={goBack}
       />
 
       {/* Main Body Containers, accounting for fixed Glass App Header */}
@@ -409,7 +441,7 @@ export default function App() {
               <HomeDashboard
                 session={session}
                 savedPlans={savedPlans}
-                onStartNewTrip={() => setActiveTab("planner")}
+                onStartNewTrip={() => pushScreen("planner")}
                 onViewPlan={handleViewPlanDetails}
                 onDeletePlan={handleDeletePlan}
               />
@@ -427,7 +459,8 @@ export default function App() {
                 isSavedMode={savedPlans.some((p) => p.id === activePlan.id)}
                 onSaveToMyPage={handleSaveToMyPage}
                 onUpdatePlan={handleUpdatePlan}
-                onBackToMyPage={() => setActiveTab("my_trips")}
+                onBack={goBack}
+                onShowToast={showToast}
               />
             )}
 
@@ -558,7 +591,9 @@ export default function App() {
               <ProfileView
                 session={session}
                 onLogout={handleLogout}
-                onConfigChange={loadPlans}
+                onConfigChange={() =>
+                  queryClient.invalidateQueries({ queryKey: ["travel-plans", session?.id] })
+                }
                 localPlans={savedPlans}
               />
             )}
@@ -571,7 +606,12 @@ export default function App() {
       </main>
 
       {/* Floating Bottom tab nav wrapper for mobile layout sizes */}
-      {session && <BottomNav activeTab={activeTab} setActiveTab={setActiveTab} />}
+      {session && <BottomNav activeTab={activeTab} setActiveTab={goToTab} />}
+
+      {/* Global Toast (저장 성공/실패 알림) */}
+      {toast && (
+        <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />
+      )}
     </div>
   );
 }

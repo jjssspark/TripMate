@@ -5,14 +5,22 @@
 
 import { useState, useEffect, useRef } from "react";
 import { TravelPlan, ItineraryDay, ItineraryActivity } from "../types";
-import { EditIcon, ShareIcon, BookmarkIcon, SaveIcon, InfoIcon, LightbulbIcon, PlusCircleIcon, TrashIcon, CheckIcon } from "./Icons";
+import { EditIcon, ShareIcon, BookmarkIcon, SaveIcon, InfoIcon, LightbulbIcon, PlusCircleIcon, TrashIcon, CheckIcon, ArrowLeftIcon } from "./Icons";
+import { setPlanShared } from "../lib/supabaseClient";
+
+interface FeedbackMessage {
+  role: "user" | "ai";
+  text: string;
+}
 
 interface PlanResultViewProps {
   plan: TravelPlan;
   isSavedMode?: boolean; // If true, it was loaded from My Page
-  onSaveToMyPage?: (plan: TravelPlan) => void;
+  onSaveToMyPage?: (plan: TravelPlan) => Promise<void>;
   onUpdatePlan?: (plan: TravelPlan) => void;
-  onBackToMyPage?: () => void;
+  onBack?: () => void;
+  readOnly?: boolean; // 공개 공유 링크(/trip/:id)에서 비로그인 방문자에게 보여줄 때 true
+  onShowToast?: (message: string, type: "success" | "error") => void;
 }
 
 const geocodeCache: { [key: string]: [number, number] } = {};
@@ -22,12 +30,19 @@ export default function PlanResultView({
   isSavedMode = false,
   onSaveToMyPage,
   onUpdatePlan,
-  onBackToMyPage
+  onBack,
+  readOnly = false,
+  onShowToast
 }: PlanResultViewProps) {
   const [plan, setPlan] = useState<TravelPlan>(initialPlan);
   const [selectedDayIdx, setSelectedDayIdx] = useState(0);
   const [isEditing, setIsEditing] = useState(false);
   const [savingLoading, setSavingLoading] = useState(false);
+  const [isSavingToMyPage, setIsSavingToMyPage] = useState(false);
+  const [isSharing, setIsSharing] = useState(false);
+  const [feedbackMessages, setFeedbackMessages] = useState<FeedbackMessage[]>([]);
+  const [feedbackInput, setFeedbackInput] = useState("");
+  const [isRevising, setIsRevising] = useState(false);
 
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
@@ -220,16 +235,110 @@ export default function PlanResultView({
     };
   }, [selectedDay, plan.destination]);
 
-  const handleShare = () => {
-    const textToCopy = `✈️ [TripMate AI] ${plan.destination} 여행 일정\n- 기간: ${plan.duration}\n- 날짜: ${plan.startDate} ~ ${plan.endDate}\n\n상세 일정은 트립메이트 AI에서 확인해 보세요!`;
-    navigator.clipboard.writeText(textToCopy).then(() => {
-      alert("여행 일정이 클립보드에 복사되었습니다! 친구들에게 공유해보세요.");
-    });
+  const handleShare = async () => {
+    if (!isSavedMode || !plan.id) {
+      onShowToast?.("공유하려면 먼저 '이 일정 저장하기'로 저장해주세요.", "error");
+      return;
+    }
+
+    setIsSharing(true);
+    try {
+      // 아직 공개 설정이 안 된 일정이면 이번 공유를 계기로 공개 전환
+      if (!plan.isShared) {
+        const ok = await setPlanShared(plan.id, true);
+        if (!ok) {
+          onShowToast?.("공유 링크 생성에 실패했습니다. 잠시 후 다시 시도해주세요.", "error");
+          return;
+        }
+        setPlan((p) => ({ ...p, isShared: true }));
+      }
+
+      const shareUrl = `${window.location.origin}/trip/${plan.id}`;
+
+      // OS 공유 시트를 쓰든 안 쓰든, 링크는 항상 클립보드에도 남겨서 바로 붙여넣을 수 있게 함
+      try {
+        await navigator.clipboard.writeText(shareUrl);
+        onShowToast?.("공유 링크가 클립보드에 복사되었습니다!", "success");
+      } catch (clipboardErr) {
+        console.error("Clipboard copy failed:", clipboardErr);
+      }
+
+      if (typeof navigator.share === "function") {
+        // 모바일/맥 Safari: OS 공유 시트(카카오톡/인스타/문자/메모 등)도 함께 제공
+        await navigator.share({
+          title: `${plan.destination} 여행 일정 - TripMate AI`,
+          text: `✈️ ${plan.destination} ${plan.duration} 여행 일정을 확인해보세요!`,
+          url: shareUrl,
+        });
+      }
+    } catch (err: any) {
+      // 사용자가 공유 시트를 취소한 경우(AbortError)는 오류가 아니므로 무시
+      if (err?.name !== "AbortError") {
+        console.error("Share failed:", err);
+        onShowToast?.("공유 중 오류가 발생했습니다.", "error");
+      }
+    } finally {
+      setIsSharing(false);
+    }
   };
 
-  const handleSave = () => {
-    if (onSaveToMyPage) {
-      onSaveToMyPage(plan);
+  const handleSendFeedback = async () => {
+    const text = feedbackInput.trim();
+    if (!text || isRevising) return;
+
+    setFeedbackMessages((prev) => [...prev, { role: "user", text }]);
+    setFeedbackInput("");
+    setIsRevising(true);
+
+    try {
+      const res = await fetch("/api/revise-plan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          destination: plan.destination,
+          budget: plan.budget,
+          companion: plan.companion,
+          planContent: plan.planContent,
+          feedback: text,
+        }),
+      });
+      const data = await res.json();
+
+      if (data.success && Array.isArray(data.planContent)) {
+        const updatedPlan = { ...plan, planContent: data.planContent };
+        setPlan(updatedPlan);
+        setFeedbackMessages((prev) => [
+          ...prev,
+          { role: "ai", text: "요청하신 대로 일정을 수정했어요! 아래 내용을 확인해보세요." },
+        ]);
+        if (isSavedMode && onUpdatePlan) {
+          await onUpdatePlan(updatedPlan);
+        }
+        onShowToast?.("일정이 피드백을 반영해 수정되었습니다!", "success");
+      } else {
+        setFeedbackMessages((prev) => [
+          ...prev,
+          { role: "ai", text: data.message || "일정을 수정하지 못했어요. 다시 시도해주세요." },
+        ]);
+      }
+    } catch (err) {
+      console.error("revise-plan request failed:", err);
+      setFeedbackMessages((prev) => [
+        ...prev,
+        { role: "ai", text: "네트워크 오류로 일정을 수정하지 못했어요." },
+      ]);
+    } finally {
+      setIsRevising(false);
+    }
+  };
+
+  const handleSave = async () => {
+    if (!onSaveToMyPage) return;
+    setIsSavingToMyPage(true);
+    try {
+      await onSaveToMyPage(plan);
+    } finally {
+      setIsSavingToMyPage(false);
     }
   };
 
@@ -310,52 +419,85 @@ export default function PlanResultView({
           <p className="text-on-surface-variant text-sm mt-1 max-w-xl">
             {plan.destination}의 숨은 비경과 취향을 녹인 특별한 여정입니다. 일차별 카드를 자유롭게 누르며 수동으로 장소를 추가하거나 삭제할 수도 있습니다.
           </p>
+
+          {/* 일정 전체 요약 배지: 여행지 / 날짜 / 인원 / 예산 */}
+          <div className="flex flex-wrap gap-2 mt-3 select-none">
+            {[
+              { icon: "location_on", label: plan.destination },
+              { icon: "calendar_month", label: `${plan.startDate} ~ ${plan.endDate}` },
+              { icon: "group", label: plan.companion },
+              { icon: "payments", label: plan.budget },
+            ].map((item) => (
+              <span
+                key={item.icon}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-surface-container rounded-full text-[11px] font-bold text-on-surface-variant"
+              >
+                <span className="material-symbols-outlined text-sm flex items-center justify-center">
+                  {item.icon}
+                </span>
+                {item.label}
+              </span>
+            ))}
+          </div>
         </div>
 
         {/* Action icons bar */}
         <div className="flex flex-wrap gap-2 items-center">
-          {onBackToMyPage && (
+          {onBack && (
             <button
-              onClick={onBackToMyPage}
+              onClick={onBack}
               className="flex items-center gap-1.5 bg-surface-container hover:bg-surface-variant px-4 py-2.5 rounded-xl text-on-surface font-semibold text-xs border border-transparent cursor-pointer active:scale-95 transition-all"
             >
-              종료
+              <ArrowLeftIcon className="w-4 h-4" />
+              뒤로가기
             </button>
           )}
 
-          {isEditing ? (
+          {!readOnly && (
+            isEditing ? (
+              <button
+                onClick={handleSaveChangesOnBackend}
+                className="flex items-center gap-1.5 bg-slate-900 hover:bg-slate-800 text-white px-4 py-2.5 rounded-xl font-bold text-xs border-none cursor-pointer active:scale-95 transition-all shadow-md"
+                disabled={savingLoading}
+              >
+                {savingLoading ? "저장 중..." : "변경 사항 저장"}
+                <CheckIcon className="w-4 h-4" />
+              </button>
+            ) : (
+              <button
+                onClick={() => setIsEditing(true)}
+                className="flex items-center gap-1.5 bg-surface-container hover:bg-surface-variant px-4 py-2.5 rounded-xl text-on-surface font-semibold text-xs border border-transparent cursor-pointer active:scale-95 transition-all"
+              >
+                수정하기 (수동 편집)
+                <EditIcon className="w-4 h-4" />
+              </button>
+            )
+          )}
+
+          {!readOnly && (
             <button
-              onClick={handleSaveChangesOnBackend}
-              className="flex items-center gap-1.5 bg-slate-900 hover:bg-slate-800 text-white px-4 py-2.5 rounded-xl font-bold text-xs border-none cursor-pointer active:scale-95 transition-all shadow-md"
-              disabled={savingLoading}
+              onClick={handleShare}
+              disabled={isSharing}
+              className="flex items-center gap-1.5 bg-surface-container hover:bg-surface-variant px-4 py-2.5 rounded-xl text-on-surface font-semibold text-xs border border-transparent cursor-pointer active:scale-95 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
             >
-              {savingLoading ? "저장 중..." : "변경 사항 저장"}
-              <CheckIcon className="w-4 h-4" />
-            </button>
-          ) : (
-            <button
-              onClick={() => setIsEditing(true)}
-              className="flex items-center gap-1.5 bg-surface-container hover:bg-surface-variant px-4 py-2.5 rounded-xl text-on-surface font-semibold text-xs border border-transparent cursor-pointer active:scale-95 transition-all"
-            >
-              수정하기 (수동 편집)
-              <EditIcon className="w-4 h-4" />
+              {isSharing ? "공유 준비 중..." : plan.isShared ? "공유 링크 다시 보내기" : "공유하기"}
+              <ShareIcon className="w-4 h-4" />
             </button>
           )}
 
-          <button
-            onClick={handleShare}
-            className="flex items-center gap-1.5 bg-surface-container hover:bg-surface-variant px-4 py-2.5 rounded-xl text-on-surface font-semibold text-xs border border-transparent cursor-pointer active:scale-95 transition-all"
-          >
-            공유하기
-            <ShareIcon className="w-4 h-4" />
-          </button>
+          {!readOnly && plan.isShared && (
+            <span className="flex items-center gap-1 px-3 py-1.5 rounded-full text-[11px] font-bold bg-primary/10 text-primary">
+              🌍 공개됨
+            </span>
+          )}
 
-          {!isSavedMode && onSaveToMyPage && (
+          {!readOnly && !isSavedMode && onSaveToMyPage && (
             <button
               onClick={handleSave}
-              className="flex items-center gap-1.5 bg-primary-container text-on-primary-container px-4 py-2.5 rounded-xl font-bold text-xs border-none shadow-md hover:opacity-95 active:scale-95 transition-all cursor-pointer"
+              disabled={isSavingToMyPage}
+              className="flex items-center gap-1.5 bg-primary text-on-primary px-4 py-2.5 rounded-xl font-bold text-xs border-none shadow-md hover:opacity-95 active:scale-95 transition-all cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
             >
-              보관함 저장하기
+              {isSavingToMyPage ? "저장 중..." : "이 일정 저장하기"}
               <BookmarkIcon className="w-4 h-4" />
             </button>
           )}
@@ -464,7 +606,7 @@ export default function PlanResultView({
                         {act.category === "맛집" ? "restaurant" : act.category === "카페" ? "local_cafe" : act.category === "쇼핑" ? "shopping_bag" : "explore"}
                       </span>
                     </div>
-                    <span className="sm:hidden font-label-md text-primary font-bold text-xs">
+                    <span className="sm:hidden px-2.5 py-1 rounded-full bg-primary/10 text-primary font-bold text-[11px]">
                       {act.time}
                     </span>
                   </div>
@@ -474,7 +616,8 @@ export default function PlanResultView({
                     {isEditing ? (
                       <div className="space-y-3 p-1">
                         {/* Edit Header Time & Title */}
-                        <div className="grid grid-cols-3 gap-2">
+                        {/* 320px 좁은 화면에서 3칸이 한 줄에 눌려 입력이 거의 불가능했던 문제 → 모바일은 세로로 쌓고 sm 이상부터 3칸 */}
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                           <div>
                             <label className="text-[10px] text-outline font-bold">시간</label>
                             <input
@@ -547,7 +690,7 @@ export default function PlanResultView({
                           <h4 className="text-base font-extrabold text-on-surface truncate pr-2">
                             {act.title}
                           </h4>
-                          <span className="hidden sm:block text-primary font-label-md text-xs font-extrabold shrink-0">
+                          <span className="hidden sm:inline-flex px-2.5 py-1 rounded-full bg-primary/10 text-primary text-[11px] font-extrabold shrink-0">
                             {act.time}
                           </span>
                         </div>
@@ -557,6 +700,8 @@ export default function PlanResultView({
                             <img
                               alt={act.title}
                               src={act.imageUrl}
+                              loading="lazy"
+                              decoding="async"
                               className="w-20 h-20 rounded-xl object-cover shrink-0 select-none bg-surface"
                             />
                           )}
@@ -575,6 +720,11 @@ export default function PlanResultView({
 
                         {/* Category and custom action redirects */}
                         <div className="flex gap-2 items-center flex-wrap pt-1 select-none">
+                          {act.isMeal && act.mealType && (
+                            <span className="px-2.5 py-1 bg-amber-100 text-amber-700 rounded-full text-[10px] font-bold">
+                              🍽 {act.mealType} 식사
+                            </span>
+                          )}
                           <span className="px-2.5 py-1 bg-surface-container rounded-full text-[10px] font-bold text-outline">
                             #{act.category}
                           </span>
@@ -618,6 +768,65 @@ export default function PlanResultView({
               )}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* 자연어 피드백 채팅 — "맛집 위주로 바꿔줘" 같은 요청을 Gemini에 보내 일정 재생성 */}
+      {!readOnly && (
+        <div className="mt-8 bg-white rounded-2xl border border-outline-variant/35 shadow-sm overflow-hidden">
+          <div className="px-5 py-4 border-b border-outline-variant/30 flex items-center gap-2">
+            <span className="material-symbols-outlined text-primary flex items-center justify-center">forum</span>
+            <h4 className="text-sm font-extrabold text-on-surface">AI에게 일정 수정 요청하기</h4>
+          </div>
+
+          {feedbackMessages.length > 0 && (
+            <div className="px-5 py-4 space-y-3 max-h-64 overflow-y-auto">
+              {feedbackMessages.map((msg, idx) => (
+                <div key={idx} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
+                  <div
+                    className={`max-w-[80%] px-4 py-2.5 rounded-2xl text-xs leading-relaxed ${
+                      msg.role === "user"
+                        ? "bg-primary text-white"
+                        : "bg-surface-container text-on-surface"
+                    }`}
+                  >
+                    {msg.text}
+                  </div>
+                </div>
+              ))}
+              {isRevising && (
+                <div className="flex justify-start">
+                  <div className="max-w-[80%] px-4 py-2.5 rounded-2xl text-xs bg-surface-container text-on-surface-variant">
+                    AI가 일정을 수정하는 중...
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleSendFeedback();
+            }}
+            className="flex items-center gap-2 px-4 py-3 border-t border-outline-variant/30"
+          >
+            <input
+              type="text"
+              value={feedbackInput}
+              onChange={(e) => setFeedbackInput(e.target.value)}
+              placeholder="예: 맛집 위주로 바꿔줘, 좀 더 여유롭게 해줘"
+              disabled={isRevising}
+              className="flex-1 bg-surface-container rounded-xl px-4 py-2.5 text-xs outline-none border-none disabled:opacity-60"
+            />
+            <button
+              type="submit"
+              disabled={isRevising || !feedbackInput.trim()}
+              className="w-10 h-10 flex items-center justify-center rounded-full bg-primary text-white disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer border-none active:scale-90 transition-all shrink-0"
+            >
+              <span className="material-symbols-outlined text-lg flex items-center justify-center">send</span>
+            </button>
+          </form>
         </div>
       )}
     </div>

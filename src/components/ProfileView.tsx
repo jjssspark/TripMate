@@ -66,8 +66,15 @@ CREATE TABLE IF NOT EXISTS travel_items (
   place_name TEXT NOT NULL,
   description TEXT[] DEFAULT '{}',
   category TEXT,
-  sequence INT DEFAULT 0
+  sequence INT DEFAULT 0,
+  is_must_visit BOOLEAN DEFAULT FALSE,
+  image_url TEXT
 );
+
+-- 이미 travel_items 테이블을 만든 적이 있는 기존 프로젝트를 위한 안전한 마이그레이션
+-- (CREATE TABLE IF NOT EXISTS는 기존 테이블에 컬럼을 추가해주지 않으므로 별도 필요)
+ALTER TABLE travel_items ADD COLUMN IF NOT EXISTS is_must_visit BOOLEAN DEFAULT FALSE;
+ALTER TABLE travel_items ADD COLUMN IF NOT EXISTS image_url TEXT;
 
 -- RLS는 "행 단위" 필터일 뿐, 테이블 자체에 대한 기본 권한(GRANT)이 없으면
 -- authenticated 롤은 RLS 검사도 가기 전에 permission denied로 막힘
@@ -79,41 +86,77 @@ ALTER TABLE users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE travel_plans ENABLE ROW LEVEL SECURITY;
 ALTER TABLE travel_items ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "본인 프로필만 조회" ON profiles FOR SELECT USING (id = auth.uid());
-CREATE POLICY "본인 프로필만 생성" ON profiles FOR INSERT WITH CHECK (id = auth.uid());
-CREATE POLICY "본인 프로필만 수정" ON profiles FOR UPDATE USING (id = auth.uid());
-CREATE POLICY "본인 프로필만 삭제" ON profiles FOR DELETE USING (id = auth.uid());
+-- 아래 모든 정책은 DROP POLICY IF EXISTS를 먼저 실행해, 이 스크립트를 몇 번을 다시
+-- 실행해도(이미 만들어진 정책이 있어도) "policy already exists" 에러 없이 안전하게 재적용된다.
+-- 아래 정책들은 모두 TO authenticated로 역할을 명시한다. 역할을 지정하지 않으면 기본값은
+-- PUBLIC(모든 역할)이라, anon(비로그인)이 travel_plans를 조회할 때도 이 정책들이 함께
+-- 평가되면서 USING절의 users 서브쿼리 때문에 "permission denied for table users"가 난다.
+DROP POLICY IF EXISTS "본인 프로필만 조회" ON profiles;
+CREATE POLICY "본인 프로필만 조회" ON profiles FOR SELECT TO authenticated USING (id = auth.uid());
+DROP POLICY IF EXISTS "본인 프로필만 생성" ON profiles;
+CREATE POLICY "본인 프로필만 생성" ON profiles FOR INSERT TO authenticated WITH CHECK (id = auth.uid());
+DROP POLICY IF EXISTS "본인 프로필만 수정" ON profiles;
+CREATE POLICY "본인 프로필만 수정" ON profiles FOR UPDATE TO authenticated USING (id = auth.uid());
+DROP POLICY IF EXISTS "본인 프로필만 삭제" ON profiles;
+CREATE POLICY "본인 프로필만 삭제" ON profiles FOR DELETE TO authenticated USING (id = auth.uid());
 
-CREATE POLICY "본인 유저행만 조회" ON users FOR SELECT USING (user_id = auth.uid());
-CREATE POLICY "본인 유저행만 생성" ON users FOR INSERT WITH CHECK (user_id = auth.uid());
-CREATE POLICY "본인 유저행만 수정" ON users FOR UPDATE USING (user_id = auth.uid());
-CREATE POLICY "본인 유저행만 삭제" ON users FOR DELETE USING (user_id = auth.uid());
+DROP POLICY IF EXISTS "본인 유저행만 조회" ON users;
+CREATE POLICY "본인 유저행만 조회" ON users FOR SELECT TO authenticated USING (user_id = auth.uid());
+DROP POLICY IF EXISTS "본인 유저행만 생성" ON users;
+CREATE POLICY "본인 유저행만 생성" ON users FOR INSERT TO authenticated WITH CHECK (user_id = auth.uid());
+DROP POLICY IF EXISTS "본인 유저행만 수정" ON users;
+CREATE POLICY "본인 유저행만 수정" ON users FOR UPDATE TO authenticated USING (user_id = auth.uid());
+DROP POLICY IF EXISTS "본인 유저행만 삭제" ON users;
+CREATE POLICY "본인 유저행만 삭제" ON users FOR DELETE TO authenticated USING (user_id = auth.uid());
 
-CREATE POLICY "본인 일정만 조회" ON travel_plans FOR SELECT
+DROP POLICY IF EXISTS "본인 일정만 조회" ON travel_plans;
+CREATE POLICY "본인 일정만 조회" ON travel_plans FOR SELECT TO authenticated
   USING (user_seq IN (SELECT user_seq FROM users WHERE user_id = auth.uid()));
-CREATE POLICY "본인 일정만 생성" ON travel_plans FOR INSERT
+DROP POLICY IF EXISTS "본인 일정만 생성" ON travel_plans;
+CREATE POLICY "본인 일정만 생성" ON travel_plans FOR INSERT TO authenticated
   WITH CHECK (user_seq IN (SELECT user_seq FROM users WHERE user_id = auth.uid()));
-CREATE POLICY "본인 일정만 수정" ON travel_plans FOR UPDATE
+DROP POLICY IF EXISTS "본인 일정만 수정" ON travel_plans;
+CREATE POLICY "본인 일정만 수정" ON travel_plans FOR UPDATE TO authenticated
   USING (user_seq IN (SELECT user_seq FROM users WHERE user_id = auth.uid()));
-CREATE POLICY "본인 일정만 삭제" ON travel_plans FOR DELETE
+DROP POLICY IF EXISTS "본인 일정만 삭제" ON travel_plans;
+CREATE POLICY "본인 일정만 삭제" ON travel_plans FOR DELETE TO authenticated
   USING (user_seq IN (SELECT user_seq FROM users WHERE user_id = auth.uid()));
 
-CREATE POLICY "본인 일정의 활동만 조회" ON travel_items FOR SELECT
+DROP POLICY IF EXISTS "본인 일정의 활동만 조회" ON travel_items;
+CREATE POLICY "본인 일정의 활동만 조회" ON travel_items FOR SELECT TO authenticated
   USING (plan_id IN (
     SELECT id FROM travel_plans WHERE user_seq IN (SELECT user_seq FROM users WHERE user_id = auth.uid())
   ));
-CREATE POLICY "본인 일정의 활동만 생성" ON travel_items FOR INSERT
+DROP POLICY IF EXISTS "본인 일정의 활동만 생성" ON travel_items;
+CREATE POLICY "본인 일정의 활동만 생성" ON travel_items FOR INSERT TO authenticated
   WITH CHECK (plan_id IN (
     SELECT id FROM travel_plans WHERE user_seq IN (SELECT user_seq FROM users WHERE user_id = auth.uid())
   ));
-CREATE POLICY "본인 일정의 활동만 수정" ON travel_items FOR UPDATE
+DROP POLICY IF EXISTS "본인 일정의 활동만 수정" ON travel_items;
+CREATE POLICY "본인 일정의 활동만 수정" ON travel_items FOR UPDATE TO authenticated
   USING (plan_id IN (
     SELECT id FROM travel_plans WHERE user_seq IN (SELECT user_seq FROM users WHERE user_id = auth.uid())
   ));
-CREATE POLICY "본인 일정의 활동만 삭제" ON travel_items FOR DELETE
+DROP POLICY IF EXISTS "본인 일정의 활동만 삭제" ON travel_items;
+CREATE POLICY "본인 일정의 활동만 삭제" ON travel_items FOR DELETE TO authenticated
   USING (plan_id IN (
     SELECT id FROM travel_plans WHERE user_seq IN (SELECT user_seq FROM users WHERE user_id = auth.uid())
-  ));`;
+  ));
+
+-- 기존 프로젝트를 위한 안전한 마이그레이션 (Day1부터 있던 컬럼이지만 혹시 누락된 경우 대비)
+ALTER TABLE travel_plans ADD COLUMN IF NOT EXISTS is_shared BOOLEAN DEFAULT FALSE;
+
+-- 공유 링크(/trip/:id) 비로그인 열람을 위한 anon 롤 권한 — is_shared=true인 일정만 노출
+GRANT SELECT ON travel_plans, travel_items TO anon;
+
+DROP POLICY IF EXISTS "공유 설정된 일정은 비로그인 조회 허용" ON travel_plans;
+CREATE POLICY "공유 설정된 일정은 비로그인 조회 허용" ON travel_plans FOR SELECT
+  TO anon
+  USING (is_shared = true);
+DROP POLICY IF EXISTS "공유 설정된 일정의 활동은 비로그인 조회 허용" ON travel_items;
+CREATE POLICY "공유 설정된 일정의 활동은 비로그인 조회 허용" ON travel_items FOR SELECT
+  TO anon
+  USING (plan_id IN (SELECT id FROM travel_plans WHERE is_shared = true));`;
 
 interface ProfileViewProps {
   session: UserSession;

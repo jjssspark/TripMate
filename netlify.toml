@@ -13,6 +13,13 @@
   to = "/app.html"
   status = 200
 
+# 공유 링크(/trip/:id) — 비로그인 사용자가 공개 일정을 열람하는 SPA 라우팅.
+# 실제 빌드 산출물은 vite.config.ts의 rollupOptions.input에 따라 index.html이므로 그쪽으로 rewrite.
+[[redirects]]
+  from = "/trip/*"
+  to = "/index.html"
+  status = 200
+
 # 보안 헤더 설정
 [[headers]]
   for = "/*"
@@ -25,5 +32,17 @@
 # 캐시 설정 - HTML은 항상 최신 버전
 [[headers]]
   for = "/*.html"
+  [headers.values]
+    Cache-Control = "no-cache, no-store, must-revalidate"
+
+# 서비스워커/매니페스트도 HTML과 동일하게 항상 최신 버전을 받아야 새 배포가 즉시 반영됨
+# (오래 캐시되면 vite-plugin-pwa의 autoUpdate가 새 버전을 감지하지 못함)
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "no-cache, no-store, must-revalidate"
+
+[[headers]]
+  for = "/manifest.webmanifest"
   [headers.values]
     Cache-Control = "no-cache, no-store, must-revalidate"

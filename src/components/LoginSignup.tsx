@@ -6,7 +6,7 @@
 import React, { useState } from "react";
 import { UserSession } from "../types";
 import { ExploreIcon, MailIcon, LockIcon, PersonIcon, ArrowRightIcon } from "./Icons";
-import { getSupabaseClient } from "../lib/supabaseClient";
+import { getSupabaseClient, buildUserSession } from "../lib/supabaseClient";
 
 interface LoginSignupProps {
   onLoginSuccess: (session: UserSession) => void;
@@ -78,22 +78,11 @@ export default function LoginSignup({ onLoginSuccess }: LoginSignupProps) {
         if (authErr) throw authErr;
 
         if (data?.user) {
-          // public.users 테이블에서 해당 유저의 user_seq 정보 조회
-          const { data: userRow, error: dbErr } = await client
-            .from("users")
-            .select("user_seq, name")
-            .eq("user_id", data.user.id)
-            .maybeSingle();
-
-          if (dbErr) {
-            console.error("DB User mapping fetch failed:", dbErr);
-          }
+          // public.users 테이블에서 해당 유저의 user_seq 정보 조회 (없으면 생성까지 처리)
+          const built = await buildUserSession(client, data.user);
 
           const sessionData: UserSession = {
-            id: data.user.id,
-            email: data.user.email || email,
-            name: userRow?.name || data.user.email?.split("@")[0] || "여행자",
-            userSeq: userRow?.user_seq ? Number(userRow.user_seq) : 1,
+            ...built,
             avatarUrl: "https://lh3.googleusercontent.com/aida-public/AB6AXuBCJRKcrw8jYy6nRr-YP0mvfcdQCZGulGdyzi2gnMfUv5adXdsvwJ-c6la6y17w3AVwz4CqHMb-ZOdjLMlclo8dS8bpakpQFAZ9V3DJZOctvzYBXd1rQF045DpAAel7e2tvMbOyA_iREPNt2Z0KfV9wRfJI6LpNzyocB3j3Zr2VyvTf6bHPZCwVk1J5MmxTf3rT476oiTNPeJV9KJ5atyNQRlm2I2gVLZU8rTcbp9flnrLAClH3tub8DCtmZGU2Ef9nAUcyb-PfuaU"
           };
 

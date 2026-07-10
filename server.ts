@@ -84,6 +84,46 @@ if (apiKey && apiKey !== "" && apiKey.trim() !== "") {
   console.warn("GEMINI_API_KEY is not configured or using placeholder. Running in fallback mode.");
 }
 
+// -------------------------------------------------------------
+// Google Places 실사진 조회 (서버 전용 키 — 클라이언트에는 절대 노출하지 않음)
+// -------------------------------------------------------------
+const googlePlacesApiKey = process.env.GOOGLE_PLACES_API_KEY || "";
+
+function fetchJsonHttps(url: string): Promise<any> {
+  return new Promise((resolve, reject) => {
+    https.get(url, (res) => {
+      let data = "";
+      res.on("data", (chunk) => (data += chunk));
+      res.on("end", () => {
+        try {
+          resolve(JSON.parse(data));
+        } catch (err) {
+          reject(err);
+        }
+      });
+    }).on("error", reject);
+  });
+}
+
+// 장소명 + 목적지로 Google Places를 검색해 실제 사진의 photo_reference를 찾는다.
+// 키가 없거나 검색 결과가 없으면 null을 반환해 호출부가 목업 이미지로 폴백하도록 한다.
+async function fetchRealPlacePhotoRef(placeName: string, destination: string): Promise<string | null> {
+  if (!googlePlacesApiKey) return null;
+
+  try {
+    const query = `${destination} ${placeName}`;
+    const url = `https://maps.googleapis.com/maps/api/place/findplacefromtext/json?input=${encodeURIComponent(
+      query
+    )}&inputtype=textquery&fields=photos&key=${googlePlacesApiKey}`;
+    const data = await fetchJsonHttps(url);
+    const photoRef = data?.candidates?.[0]?.photos?.[0]?.photo_reference;
+    return photoRef || null;
+  } catch (err) {
+    console.error(`Google Places photo lookup failed for "${placeName}":`, err);
+    return null;
+  }
+}
+
 // Helper to choose corresponding high-quality mockup images for places
 function getMockupImage(category: string, destination: string, index: number): string {
   const normalizedDest = (destination || "").toLowerCase();
@@ -244,6 +284,7 @@ app.post("/api/generate-plan", async (req, res) => {
     endDate,
     companion,
     budget,
+    intensity,
     styles,
     mustVisitPlaces,
     comments
@@ -252,6 +293,9 @@ app.post("/api/generate-plan", async (req, res) => {
   if (!destination) {
     return res.status(400).json({ error: "Destination is required" });
   }
+
+  // 여행 강도에 따라 (식사 제외) 하루 스팟 개수를 결정: 여유롭게=3곳, 빡빡하게=5곳
+  const spotsPerDay = intensity === "빡빡하게" ? 5 : 3;
 
   // Calculate duration
   let durationText = "2박 3일";
@@ -267,55 +311,78 @@ app.post("/api/generate-plan", async (req, res) => {
   const createFallbackPlan = () => {
     const dCount = startDate && endDate ? Math.ceil(Math.abs(new Date(endDate).getTime() - new Date(startDate).getTime()) / (1000 * 60 * 60 * 24)) + 1 : 3;
     const fallbackDays = [];
+    const spotCategories = ["관광", "자연", "카페", "쇼핑", "관광"];
 
     for (let d = 1; d <= dCount; d++) {
-      fallbackDays.push({
-        day: d,
-        theme: `${destination}에서의 특별한 하루 - ${d}일차`,
-        description: `${destination}의 핵심 하이라이트를 탐방하는 일차별 스마트 동선입니다.`,
-        activities: [
-          {
-            time: "오전 09:30",
-            title: d === 1 && mustVisitPlaces ? mustVisitPlaces : `${destination} 인기 탐방 명소`,
-            description: "놓치고 싶지 않은 이 지역 최고의 랜드마크를 방문하여 아침 산책과 기념사진 촬영을 즐깁니다.",
-            location: `${destination} 시내 중심가`,
-            category: "관광",
-            mustVisit: d === 1 && !!mustVisitPlaces,
-            tags: ["랜드마크", "아침산책", "인생샷"],
-            latitude: d === 1 && mustVisitPlaces ? 36.3276 : 36.3504 + d * 0.005,
-            longitude: d === 1 && mustVisitPlaces ? 127.4272 : 127.3845 + d * 0.005
-          },
-          {
+      const activities: any[] = [];
+
+      activities.push({
+        time: "오전 08:00",
+        title: `${destination} 로컬 조식 맛집`,
+        description: "하루를 든든하게 시작할 수 있는 현지인 추천 조식 맛집에서 아침 식사를 즐깁니다.",
+        location: `${destination} 시내`,
+        category: "맛집",
+        isMeal: true,
+        mealType: "아침",
+        tags: ["조식", "현지맛집"],
+        latitude: 36.3504 + d * 0.005,
+        longitude: 127.3845 + d * 0.005
+      });
+
+      const beforeLunch = Math.ceil(spotsPerDay / 2);
+      for (let s = 0; s < spotsPerDay; s++) {
+        const isFirstMustVisit = d === 1 && s === 0 && !!mustVisitPlaces;
+        const hour = s < beforeLunch ? 9 + s : 14 + (s - beforeLunch) * 2;
+        const period = hour < 12 ? "오전" : "오후";
+        const displayHour = hour > 12 ? hour - 12 : hour;
+
+        activities.push({
+          time: `${period} ${String(displayHour).padStart(2, "0")}:30`,
+          title: isFirstMustVisit ? mustVisitPlaces : `${destination} 인기 명소 ${s + 1}`,
+          description: "여행 가이드북 추천 스팟으로 여유롭게 둘러보기 좋은 곳입니다.",
+          location: `${destination} 명소 구역`,
+          category: spotCategories[s % spotCategories.length],
+          isMeal: false,
+          mustVisit: isFirstMustVisit,
+          tags: ["명소", "포토스팟"],
+          latitude: 36.3504 + d * 0.005 + s * 0.003,
+          longitude: 127.3845 + d * 0.005 + s * 0.003
+        });
+
+        if (s === beforeLunch - 1) {
+          activities.push({
             time: "오후 12:30",
             title: "추천 한식/현지식 소문난 맛집",
             description: "인근에서 가장 유명하고 후기가 극찬인 레스토랑에서 든든하게 점심 식사를 즐깁니다.",
             location: `${destination} 번화가`,
             category: "맛집",
+            isMeal: true,
+            mealType: "점심",
             tags: ["현지맛집", "미식탐방", "강력추천"],
             latitude: 36.3504 + d * 0.005 - 0.002,
             longitude: 127.3845 + d * 0.005 + 0.003
-          },
-          {
-            time: "오후 02:30",
-            title: "감성 가득한 로컬 스페셜티 카페",
-            description: "스타일리시한 인테리어와 수제 디저트가 일품인 핫플레이스 카페에서 차 한잔을 기울이며 휴식을 누립니다.",
-            location: `${destination} 골목 정취`,
-            category: "카페",
-            tags: ["감성카페", "수제디저트", "힐링"],
-            latitude: 36.3504 + d * 0.005 + 0.004,
-            longitude: 127.3845 + d * 0.005 - 0.002
-          },
-          {
-            time: "오후 05:00",
-            title: "쇼핑 스트리트 및 소품샵 구경",
-            description: "로컬 소품과 한정판 기념품을 만나볼 수 있는 개성 넘치는 거리를 구경하며 지인들 선물을 마련합니다.",
-            location: `${destination} 쇼핑 에비뉴`,
-            category: "쇼핑",
-            tags: ["쇼핑", "기념품", "거리탐방"],
-            latitude: 36.3504 + d * 0.005 - 0.003,
-            longitude: 127.3845 + d * 0.005 + 0.001
-          }
-        ]
+          });
+        }
+      }
+
+      activities.push({
+        time: "오후 07:00",
+        title: `${destination} 감성 저녁 맛집`,
+        description: "하루를 마무리하는 분위기 좋은 저녁 식사 장소에서 여유롭게 하루를 정리합니다.",
+        location: `${destination} 번화가`,
+        category: "맛집",
+        isMeal: true,
+        mealType: "저녁",
+        tags: ["저녁", "현지맛집"],
+        latitude: 36.3504 + d * 0.005 - 0.004,
+        longitude: 127.3845 + d * 0.005 - 0.002
+      });
+
+      fallbackDays.push({
+        day: d,
+        theme: `${destination}에서의 특별한 하루 - ${d}일차`,
+        description: `${destination}의 핵심 하이라이트를 탐방하는 일차별 스마트 동선입니다.`,
+        activities
       });
     }
 
@@ -327,6 +394,7 @@ app.post("/api/generate-plan", async (req, res) => {
       duration: durationText,
       budget: budget || "표준형",
       companion: companion || "혼자",
+      intensity: intensity || "여유롭게",
       styles: styles || ["맛집", "자연"],
       mustVisitPlaces: mustVisitPlaces || "",
       planContent: fallbackDays,
@@ -349,14 +417,18 @@ app.post("/api/generate-plan", async (req, res) => {
 - 예산 수준: ${budget} (절약형, 표준형, 고급형 중 하나)
 - 선호하는 스타일 키워드들: ${Array.isArray(styles) ? styles.join(", ") : styles}
 - 반드시 꼭 방문해야 할 장소 (Must-Visit): ${mustVisitPlaces}
+- 여행 강도: ${intensity || "여유롭게"}
 - 추가 요청 및 피드백 메모사항: ${comments || "없음"}
 
 [동선 설계 안내 및 제약사항]
-1. 하루에 3~4개의 명확히 구분된 시간대별 일정을 배치하세요. (오전, 점심식사, 오후, 저녁식사 혹은 쇼핑/카페 등)
-2. 맛집이나 카페 스타일을 선호하는 경우 점심/저녁 식사 시간대에 어울리는 식당이나 명소를 동선 상에 스마트하게 배치하세요.
-3. 요청한 필수 방문 장소([Must-Visit])가 있다면, 일치하는 활동에서  "mustVisit": true 로 설정하고 실제 여행 일정에 반드시 포함하세요.
-4. 설명은 여행 가이드북처럼 구체적이고 현지 감성을 살려 팁과 정겨운 톤("~를 강력 추천합니다", "~를 만끽해보세요" 처럼 존댓말 한글)으로 작성해주세요.
-5. 모든 장소 활동(activities)에 대해 지도로 표현하고 이동 선을 그릴 수 있도록 실제 위도(latitude)와 경도(longitude) 값(실수형 숫자 형태)을 유추하여 반드시 포함시켜주세요. (예: 대전 성심당 본점인 경우 36.3276, 127.4272)
+1. 하루 일정에는 항상 아침식사, 점심식사, 저녁식사 총 3개의 식사 활동을 포함하세요. 각 식사 활동은 "isMeal": true 로 표시하고 "mealType"에 "아침"/"점심"/"저녁" 중 하나를 지정하세요. category는 "맛집" 또는 "카페"로 설정하세요.
+2. 식사를 제외한 관광/체험/쇼핑 등 일반 활동은 하루에 정확히 ${spotsPerDay}개를 배치하세요 (사용자가 선택한 여행 강도 "${intensity || "여유롭게"}" 기준: 여유롭게=3개, 빡빡하게=5개). 이 일반 활동들은 "isMeal": false 로 표시하세요.
+3. 결과적으로 하루 activities 배열의 총 개수는 식사 3개 + 일반 활동 ${spotsPerDay}개 = 정확히 ${spotsPerDay + 3}개여야 합니다.
+4. 맛집이나 카페 스타일을 선호하는 경우 식사 시간대 장소 선정에 그 취향을 반영하세요.
+5. 요청한 필수 방문 장소([Must-Visit])가 있다면, 일치하는 활동에서  "mustVisit": true 로 설정하고 실제 여행 일정에 반드시 포함하세요.
+6. 설명은 여행 가이드북처럼 구체적이고 현지 감성을 살려 팁과 정겨운 톤("~를 강력 추천합니다", "~를 만끽해보세요" 처럼 존댓말 한글)으로 작성해주세요.
+7. 모든 장소 활동(activities)에 대해 지도로 표현하고 이동 선을 그릴 수 있도록 실제 위도(latitude)와 경도(longitude) 값(실수형 숫자 형태)을 유추하여 반드시 포함시켜주세요. (예: 대전 성심당 본점인 경우 36.3276, 127.4272)
+8. 모든 장소의 title은 실제로 존재하는 구체적인 상호명(가게 이름)으로 작성하세요. 특히 category가 "맛집", "카페", "숙소"인 경우 "현지맛집", "로컬 카페", "소문난 맛집"처럼 일반명사로 뭉뚱그리지 말고, 목적지에서 실제로 유명하거나 평점이 좋은 구체적인 상호를 정확히 명시하세요. (예: "대전 로컬 맛집"이 아니라 "성심당 본점", "태평소국밥")
 
 반드시 명시된 JSON 스키마를 준수하여 응답해 주세요.`;
 
@@ -382,10 +454,12 @@ app.post("/api/generate-plan", async (req, res) => {
                   type: Type.OBJECT,
                   properties: {
                     time: { type: Type.STRING, description: "시간대 (예: 오전 09:30, 오후 12:30, 오후 03:00)" },
-                    title: { type: Type.STRING, description: "방문 장소명 또는 활동명" },
+                    title: { type: Type.STRING, description: "방문 장소의 실제 상호명(가게 이름)을 구체적으로 기입 (예: '성심당 본점'). '현지맛집', '로컬 카페'처럼 일반명사로 뭉뚱그리지 말 것" },
                     description: { type: Type.STRING, description: "여행 가이드북 감성의 풍부하고 실용적인 공간 묘사, 매장 팁, 먹어야 할 메뉴 추천" },
                     location: { type: Type.STRING, description: "그 장소의 추천 랜드마크 지역 혹은 도로명" },
                     category: { type: Type.STRING, description: "활동 유형 (관광, 맛집, 카페, 쇼핑, 숙소, 이동 중 하나를 매칭)" },
+                    isMeal: { type: Type.BOOLEAN, description: "아침/점심/저녁 식사 활동이면 true, 일반 관광/체험 활동이면 false" },
+                    mealType: { type: Type.STRING, description: "식사 활동인 경우 '아침', '점심', '저녁' 중 하나. 식사가 아니면 빈 문자열" },
                     mustVisit: { type: Type.BOOLEAN, description: "사용자가 필수 지목한 가고싶은 곳인 경우 true, 아니면 false" },
                     latitude: { type: Type.NUMBER, description: "해당 장소의 위도 좌표 실수형 데이터 (예: 36.3276)" },
                     longitude: { type: Type.NUMBER, description: "해당 장소의 경도 좌표 실수형 데이터 (예: 127.4272)" },
@@ -395,7 +469,7 @@ app.post("/api/generate-plan", async (req, res) => {
                       description: "연관된 해시태그 목록 2-3개 (예: ['인생샷', '전위예술', '오션뷰'])"
                     }
                   },
-                  required: ["time", "title", "description", "location", "category", "latitude", "longitude"]
+                  required: ["time", "title", "description", "location", "category", "isMeal", "latitude", "longitude"]
                 }
               }
             },
@@ -445,16 +519,23 @@ app.post("/api/generate-plan", async (req, res) => {
     const cleanedText = responseText.trim();
     const daysContent = JSON.parse(cleanedText);
 
-    // Enhance images dynamically on server-side using category mockups
-    const enhancedDays = daysContent.map((dayObj: any) => {
-      if (Array.isArray(dayObj.activities)) {
-        dayObj.activities = dayObj.activities.map((act: any, idx: number) => {
-          act.imageUrl = getMockupImage(act.category, destination, idx);
-          return act;
-        });
-      }
-      return dayObj;
-    });
+    // Enhance images: Google Places 실사진을 우선 조회하고, 키가 없거나 못 찾으면 카테고리 목업 이미지로 폴백
+    const enhancedDays = await Promise.all(
+      daysContent.map(async (dayObj: any) => {
+        if (Array.isArray(dayObj.activities)) {
+          dayObj.activities = await Promise.all(
+            dayObj.activities.map(async (act: any, idx: number) => {
+              const photoRef = await fetchRealPlacePhotoRef(act.title, destination);
+              act.imageUrl = photoRef
+                ? `/api/place-photo?ref=${encodeURIComponent(photoRef)}`
+                : getMockupImage(act.category, destination, idx);
+              return act;
+            })
+          );
+        }
+        return dayObj;
+      })
+    );
 
     const finalPlan = {
       title: `${destination} ${durationText} 여행`,
@@ -464,6 +545,7 @@ app.post("/api/generate-plan", async (req, res) => {
       duration: durationText,
       budget: budget || "표준형",
       companion: companion || "혼자",
+      intensity: intensity || "여유롭게",
       styles: styles || ["맛집", "자연"],
       mustVisitPlaces: mustVisitPlaces || "",
       planContent: enhancedDays,
@@ -477,6 +559,174 @@ app.post("/api/generate-plan", async (req, res) => {
     const fallback = createFallbackPlan();
     return res.json(fallback);
   }
+});
+
+// -------------------------------------------------------------
+// 5.4 자연어 피드백 기반 일정 재생성 — 기존 planContent + 사용자 피드백을 Gemini에 보내 수정
+// -------------------------------------------------------------
+app.post("/api/revise-plan", async (req, res) => {
+  const { destination, budget, companion, planContent, feedback } = req.body;
+
+  if (!destination || !Array.isArray(planContent) || !feedback) {
+    return res.status(400).json({ success: false, message: "destination, planContent, feedback가 모두 필요합니다." });
+  }
+
+  if (!ai) {
+    return res.json({ success: false, message: "AI 서버가 설정되지 않아 피드백을 반영할 수 없습니다." });
+  }
+
+  const prompt = `당신은 세계적인 여행 가이드이자 전문 AI 여행 컨시어지입니다.
+아래는 사용자가 이미 만들어 둔 여행 일정입니다. 사용자의 피드백을 반영해 이 일정을 자연스럽게 수정해주세요.
+
+[기존 여행 일정 (JSON)]
+${JSON.stringify(planContent)}
+
+[여행 기본 정보]
+- 목적지: ${destination}
+- 예산 수준: ${budget || "표준형"}
+- 동행자 유형: ${companion || "혼자"}
+
+[사용자 피드백]
+"${feedback}"
+
+[수정 지침]
+1. 사용자 피드백과 직접 관련 없는 부분(테마, 시간대, 필수 방문 장소 등)은 최대한 그대로 유지하세요.
+2. 피드백이 특정 스타일(예: "맛집 위주로 바꿔줘", "좀 더 여유롭게 해줘")을 요청하면 관련 활동들을 그 방향에 맞게 교체하거나 조정하세요.
+3. 각 Day의 activities 배열 구조(아침/점심/저녁 식사 3개 포함)는 기존과 동일하게 유지하세요.
+4. 모든 장소의 title은 실제로 존재하는 구체적인 상호명(가게 이름)으로 작성하세요. "현지맛집"처럼 일반명사로 뭉뚱그리지 마세요.
+5. 모든 활동에 대해 실제 위도(latitude)와 경도(longitude) 값을 반드시 포함하세요.
+
+반드시 명시된 JSON 스키마를 준수하여, 수정이 반영된 전체 일정(day별 배열)을 응답해주세요.`;
+
+  const generateRevision = async (modelName: string) => {
+    if (!ai) throw new Error("AI client not initialized");
+    return await ai.models.generateContent({
+      model: modelName,
+      contents: prompt,
+      config: {
+        systemInstruction: "당신은 항상 정확한 JSON 데이터를 출력하는 여행 도우미입니다. 한국어로 응답하세요.",
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              day: { type: Type.INTEGER, description: "여행차수 일 수 (1, 2, 3 등)" },
+              theme: { type: Type.STRING, description: "해당 일차의 흥미진진한 핵심 테마 제목" },
+              description: { type: Type.STRING, description: "해당 일차의 일정 전체 개요 및 감성적 한 줄 요약" },
+              activities: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    time: { type: Type.STRING, description: "시간대 (예: 오전 09:30, 오후 12:30, 오후 03:00)" },
+                    title: { type: Type.STRING, description: "방문 장소의 실제 상호명(가게 이름)을 구체적으로 기입" },
+                    description: { type: Type.STRING, description: "여행 가이드북 감성의 풍부하고 실용적인 공간 묘사, 매장 팁" },
+                    location: { type: Type.STRING, description: "그 장소의 추천 랜드마크 지역 혹은 도로명" },
+                    category: { type: Type.STRING, description: "활동 유형 (관광, 맛집, 카페, 쇼핑, 숙소, 이동 중 하나를 매칭)" },
+                    isMeal: { type: Type.BOOLEAN, description: "아침/점심/저녁 식사 활동이면 true, 일반 관광/체험 활동이면 false" },
+                    mealType: { type: Type.STRING, description: "식사 활동인 경우 '아침', '점심', '저녁' 중 하나. 식사가 아니면 빈 문자열" },
+                    mustVisit: { type: Type.BOOLEAN, description: "사용자가 필수 지목한 가고싶은 곳인 경우 true, 아니면 false" },
+                    latitude: { type: Type.NUMBER, description: "해당 장소의 위도 좌표 실수형 데이터" },
+                    longitude: { type: Type.NUMBER, description: "해당 장소의 경도 좌표 실수형 데이터" },
+                    tags: {
+                      type: Type.ARRAY,
+                      items: { type: Type.STRING },
+                      description: "연관된 해시태그 목록 2-3개"
+                    }
+                  },
+                  required: ["time", "title", "description", "location", "category", "isMeal", "latitude", "longitude"]
+                }
+              }
+            },
+            required: ["day", "theme", "description", "activities"]
+          }
+        }
+      }
+    });
+  };
+
+  const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  try {
+    let response;
+    try {
+      response = await generateRevision("gemini-2.5-flash");
+    } catch (primaryErr: any) {
+      console.warn(`[TripMate AI] revise-plan primary model failed: ${primaryErr.message || primaryErr}`);
+      await sleep(1500);
+      response = await generateRevision("gemini-2.5-flash-lite");
+    }
+
+    const responseText = response.text;
+    if (!responseText) {
+      throw new Error("Empty response text from Gemini API");
+    }
+
+    const revisedDays = JSON.parse(responseText.trim());
+
+    // 기존 generate-plan과 동일하게 실제 장소 사진을 우선 조회하고, 없으면 카테고리 목업 이미지로 대체
+    const enhancedDays = await Promise.all(
+      revisedDays.map(async (dayObj: any) => {
+        if (Array.isArray(dayObj.activities)) {
+          dayObj.activities = await Promise.all(
+            dayObj.activities.map(async (act: any, idx: number) => {
+              const photoRef = await fetchRealPlacePhotoRef(act.title, destination);
+              act.imageUrl = photoRef
+                ? `/api/place-photo?ref=${encodeURIComponent(photoRef)}`
+                : getMockupImage(act.category, destination, idx);
+              return act;
+            })
+          );
+        }
+        return dayObj;
+      })
+    );
+
+    return res.json({ success: true, planContent: enhancedDays });
+  } catch (err) {
+    console.error("Gemini revise-plan failed:", err);
+    return res.json({ success: false, message: "AI가 피드백을 반영하는 데 실패했습니다. 잠시 후 다시 시도해 주세요." });
+  }
+});
+
+// -------------------------------------------------------------
+// 5.5 Google Places Photo Proxy — API 키를 클라이언트에 노출하지 않고 실사진을 서빙
+// -------------------------------------------------------------
+app.get("/api/place-photo", (req, res) => {
+  const ref = req.query.ref as string;
+  const maxwidth = (req.query.maxwidth as string) || "400";
+
+  if (!ref) {
+    return res.status(400).send("ref query parameter is required");
+  }
+  if (!googlePlacesApiKey) {
+    return res.status(503).send("Google Places API key is not configured");
+  }
+
+  const googleUrl = `https://maps.googleapis.com/maps/api/place/photo?maxwidth=${encodeURIComponent(
+    maxwidth
+  )}&photo_reference=${encodeURIComponent(ref)}&key=${googlePlacesApiKey}`;
+
+  https.get(googleUrl, (googleRes) => {
+    // Google Place Photo는 실제 이미지 CDN으로 302 리다이렉트를 반환한다.
+    if (googleRes.statusCode === 302 && googleRes.headers.location) {
+      https.get(googleRes.headers.location, (imgRes) => {
+        res.setHeader("Content-Type", imgRes.headers["content-type"] || "image/jpeg");
+        res.setHeader("Cache-Control", "public, max-age=86400");
+        imgRes.pipe(res);
+      }).on("error", (err) => {
+        console.error("Place photo redirect fetch failed:", err);
+        res.status(502).send("Failed to fetch photo");
+      });
+    } else {
+      res.setHeader("Content-Type", googleRes.headers["content-type"] || "image/jpeg");
+      googleRes.pipe(res);
+    }
+  }).on("error", (err) => {
+    console.error("Place photo fetch failed:", err);
+    res.status(502).send("Failed to fetch photo");
+  });
 });
 
 // -------------------------------------------------------------
