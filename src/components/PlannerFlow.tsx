@@ -31,6 +31,7 @@ export default function PlannerFlow({ onPlanGenerated }: PlannerFlowProps) {
   const [mustVisitPlaces, setMustVisitPlaces] = useState<string[]>(["성심당", "한밭수목원"]);
   const [budget, setBudget] = useState("표준형");
   const [intensity, setIntensity] = useState("여유롭게");
+  const [transportMode, setTransportMode] = useState("대중교통");
 
   // Extra details
   const [comments, setComments] = useState("넉넉한 여행 스케쥴");
@@ -76,6 +77,9 @@ export default function PlannerFlow({ onPlanGenerated }: PlannerFlowProps) {
   };
 
   const handleAddTag = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    // 한글 IME 조합 중 Enter를 누르면 조합 확정 키다운과 실제 Enter 키다운이 연달아 발생해
+    // 태그가 두 번 추가되는 문제가 있음 — 조합 중(isComposing)인 키다운은 무시한다.
+    if (e.nativeEvent.isComposing) return;
     if (e.key === "Enter" || e.key === ",") {
       e.preventDefault();
       const val = tagInput.trim().replace(/,/g, "");
@@ -100,6 +104,7 @@ export default function PlannerFlow({ onPlanGenerated }: PlannerFlowProps) {
       companion,
       budget,
       intensity,
+      transportMode,
       styles,
       mustVisitPlaces: mustVisitPlaces.join(", "),
       comments
@@ -431,6 +436,42 @@ export default function PlannerFlow({ onPlanGenerated }: PlannerFlowProps) {
                       <span className={`text-[10px] ${isActive ? "text-white/80" : "text-outline"}`}>
                         {opt.desc}
                       </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Field: Transport Mode (동선 계산에 반영) */}
+            <div className="space-y-3 pt-2">
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-primary text-xl font-bold">
+                  directions
+                </span>
+                <h3 className="font-headline-md text-base leading-6 font-bold">이동수단</h3>
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                {[
+                  { label: "도보", icon: "directions_walk" },
+                  { label: "대중교통", icon: "directions_bus" },
+                  { label: "자차", icon: "directions_car" }
+                ].map((opt) => {
+                  const isActive = transportMode === opt.label;
+                  return (
+                    <button
+                      key={opt.label}
+                      type="button"
+                      onClick={() => setTransportMode(opt.label)}
+                      className={`flex flex-col items-center gap-1.5 p-4 rounded-xl border transition-all active:scale-95 cursor-pointer ${
+                        isActive
+                          ? "bg-slate-900 border-slate-900 text-white font-bold"
+                          : "border-outline-variant bg-surface-container-lowest text-on-surface-variant hover:border-slate-400"
+                      }`}
+                    >
+                      <span className="material-symbols-outlined text-2xl flex items-center justify-center">
+                        {opt.icon}
+                      </span>
+                      <span className="font-label-sm text-xs">{opt.label}</span>
                     </button>
                   );
                 })}

@@ -151,6 +151,7 @@ export const handler = async (event: any) => {
     companion,
     budget,
     intensity,
+    transportMode,
     styles,
     mustVisitPlaces,
     comments
@@ -166,6 +167,7 @@ export const handler = async (event: any) => {
   console.log(`- 동행인: ${companion}`);
   console.log(`- 예산: ${budget}`);
   console.log(`- 여행 강도: ${intensity || "여유롭게"} (하루 ${spotsPerDay}스팟 + 식사 3개)`);
+  console.log(`- 이동수단: ${transportMode || "대중교통"}`);
   console.log(`- 스타일: ${Array.isArray(styles) ? styles.join(", ") : styles}`);
   console.log(`- 필수방문지: ${mustVisitPlaces || "없음"}`);
   console.log(`- 추가요청: ${comments || "없음"}`);
@@ -279,6 +281,7 @@ export const handler = async (event: any) => {
       budget: budget || "표준형",
       companion: companion || "혼자",
       intensity: intensity || "여유롭게",
+      transportMode: transportMode || "대중교통",
       styles: styles || ["맛집", "자연"],
       mustVisitPlaces: mustVisitPlaces || "",
       planContent: fallbackDays,
@@ -329,6 +332,7 @@ export const handler = async (event: any) => {
 - 선호하는 스타일 키워드들: ${Array.isArray(styles) ? styles.join(", ") : styles}
 - 반드시 꼭 방문해야 할 장소 (Must-Visit): ${mustVisitPlaces}
 - 여행 강도: ${intensity || "여유롭게"}
+- 선호 이동수단: ${transportMode || "대중교통"}
 - 추가 요청 및 피드백 메모사항: ${comments || "없음"}
 
 [동선 설계 안내 및 제약사항]
@@ -340,6 +344,8 @@ export const handler = async (event: any) => {
 6. 설명은 여행 가이드북처럼 구체적이고 현지 감성을 살려 팁과 정겨운 톤("~를 강력 추천합니다", "~를 만끽해보세요" 처럼 존댓말 한글)으로 작성해주세요.
 7. 모든 장소 활동(activities)에 대해 지도로 표현하고 이동 선을 그릴 수 있도록 실제 위도(latitude)와 경도(longitude) 값(실수형 숫자 형태)을 유추하여 반드시 포함시켜주세요. (예: 대전 성심당 본점인 경우 36.3276, 127.4272)
 8. 모든 장소의 title은 실제로 존재하는 구체적인 상호명(가게 이름)으로 작성하세요. 특히 category가 "맛집", "카페", "숙소"인 경우 "현지맛집", "로컬 카페", "소문난 맛집"처럼 일반명사로 뭉뚱그리지 말고, 목적지에서 실제로 유명하거나 평점이 좋은 구체적인 상호를 정확히 명시하세요. (예: "대전 로컬 맛집"이 아니라 "성심당 본점", "태평소국밥")
+9. 같은 날짜(Day)에 배치되는 활동들은 서로 지나치게 먼 거리로 이동해야 하는 동선을 추천하지 마세요. 하루 안에서는 인접한 지역/동네 단위로 묶어서 구성하고, 다른 도시나 먼 외곽 지역으로 왕복해야 하는 장소는 추천하지 마세요.
+10. 사용자가 선택한 이동수단은 "${transportMode || "대중교통"}"입니다. 도보인 경우 각 활동 장소가 도보 15~20분(약 1km) 이내로 이동 가능하도록 매우 가깝게 배치하고, 대중교통인 경우 대중교통으로 30분 이내로 이동 가능한 범위 내에서 구성하며, 자차인 경우 그보다는 넓은 반경이라도 무리 없이 이동 가능한 범위 내에서 구성하세요.
 
 반드시 명시된 JSON 스키마를 준수하여 응답해 주세요.`;
 
@@ -457,6 +463,7 @@ export const handler = async (event: any) => {
       budget: budget || "표준형",
       companion: companion || "혼자",
       intensity: intensity || "여유롭게",
+      transportMode: transportMode || "대중교통",
       styles: styles || ["맛집", "자연"],
       mustVisitPlaces: mustVisitPlaces || "",
       planContent: enhancedDays,

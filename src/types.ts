@@ -38,6 +38,7 @@ export interface TravelPlan {
   budget: string;
   companion: string;
   intensity?: "여유롭게" | "빡빡하게" | string;
+  transportMode?: string;
   styles: string[];
   mustVisitPlaces: string;
   planContent: ItineraryDay[];
