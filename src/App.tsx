@@ -449,7 +449,10 @@ export default function App() {
 
             {/* 2. PLANNER FLOW TAB */}
             {activeTab === "planner" && (
-              <PlannerFlow onPlanGenerated={handlePlanGenerated} />
+              <PlannerFlow
+                onPlanGenerated={handlePlanGenerated}
+                onError={(message) => showToast(message, "error")}
+              />
             )}
 
             {/* 3. GENERATION PLAN RESULT DETAILS TAB */}

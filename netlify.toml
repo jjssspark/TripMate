@@ -2,6 +2,13 @@
   command = "npm run build"
   publish = "dist"
 
+# API 요청을 Netlify Functions(netlify/functions/*)로 연결
+# 이 규칙이 없으면 /api/generate-plan 등이 매칭되는 라우트가 없어 404가 발생함
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/:splat"
+  status = 200
+
 [[redirects]]
   from = "/"
   to = "/landing.html"

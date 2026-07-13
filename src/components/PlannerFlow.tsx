@@ -9,9 +9,10 @@ import { ArrowLeftIcon, ArrowRightIcon, SparklesIcon, EditIcon, LocationIcon, Ca
 
 interface PlannerFlowProps {
   onPlanGenerated: (plan: TravelPlan) => void;
+  onError: (message: string) => void;
 }
 
-export default function PlannerFlow({ onPlanGenerated }: PlannerFlowProps) {
+export default function PlannerFlow({ onPlanGenerated, onError }: PlannerFlowProps) {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
 
@@ -136,7 +137,7 @@ export default function PlannerFlow({ onPlanGenerated }: PlannerFlowProps) {
       onPlanGenerated(plan);
     } catch (err) {
       console.error("★ [TripMate AI] AI Planner Flow Error (일정 생성 중 실패):", err);
-      // Fallback is also sent by server, so we are safe
+      onError("일정 생성에 실패했습니다. 잠시 후 다시 시도해 주세요.");
     } finally {
       setLoading(false);
     }
