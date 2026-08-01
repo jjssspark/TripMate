@@ -9,7 +9,7 @@ export default defineConfig(() => {
 
   return {
     root: projectRoot,
-    publicDir: 'static',
+    publicDir: 'public',
     plugins: [
       react(),
       tailwindcss(),

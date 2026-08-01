@@ -14,12 +14,6 @@
   to = "/landing.html"
   status = 200
 
-# React 앱 SPA 라우팅 (/app 경로)
-[[redirects]]
-  from = "/app/*"
-  to = "/app.html"
-  status = 200
-
 # 공유 링크(/trip/:id) — 비로그인 사용자가 공개 일정을 열람하는 SPA 라우팅.
 # 실제 빌드 산출물은 vite.config.ts의 rollupOptions.input에 따라 index.html이므로 그쪽으로 rewrite.
 [[redirects]]
