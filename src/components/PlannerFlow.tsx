@@ -6,6 +6,7 @@
 import React, { useState } from "react";
 import { TravelPlan } from "../types";
 import { ArrowLeftIcon, ArrowRightIcon, SparklesIcon, EditIcon, LocationIcon, CalendarIcon } from "./Icons";
+import { searchDestinations } from "../lib/destinations";
 
 interface PlannerFlowProps {
   onPlanGenerated: (plan: TravelPlan) => void;
@@ -38,15 +39,8 @@ export default function PlannerFlow({ onPlanGenerated, onError }: PlannerFlowPro
   // Extra details
   const [comments, setComments] = useState("");
 
-  const popularDestinations = [
-    "서울", "부산", "제주도", "강릉", "여수", "경주",
-    "도쿄", "오사카", "후쿠오카", "삿포로",
-    "파리", "방콕", "다낭", "시드니"
-  ];
-
-  const filteredDestinations = popularDestinations.filter(
-    (d) => d.includes(destination.trim()) && d !== destination.trim()
-  );
+  // 초성 검색 지원. 관련도 순 정렬은 searchDestinations가 처리한다.
+  const filteredDestinations = searchDestinations(destination);
 
   const handleSelectDestination = (name: string) => {
     setDestination(name);
@@ -244,7 +238,7 @@ export default function PlannerFlow({ onPlanGenerated, onError }: PlannerFlowPro
                   onBlur={() => setTimeout(() => setShowDestSuggestions(false), 150)}
                   autoComplete="off"
                   className="w-full bg-transparent border-none py-4 pl-12 pr-4 rounded-xl focus:ring-0 text-on-surface font-body-md placeholder:text-outline-variant outline-none"
-                  placeholder="도시 또는 국가를 입력하세요 (예: 도쿄, 제주도 등)"
+                  placeholder="여행지를 입력하세요 (예: 강릉, 제주도, ㄱㄴ)"
                   required
                 />
               </div>
