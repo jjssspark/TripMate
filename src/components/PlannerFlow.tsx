@@ -47,6 +47,25 @@ export default function PlannerFlow({ onPlanGenerated, onError }: PlannerFlowPro
     setShowDestSuggestions(false);
   };
 
+  // 종료일이 시작일보다 빠른 조합은 선택 시점에 막는다.
+  // 날짜 문자열이 "YYYY-MM-DD" 고정 형식이라 문자열 비교로 대소가 정확히 나온다.
+  const handleEndDateChange = (value: string) => {
+    if (value && startDate && value < startDate) {
+      onError("종료 날짜는 시작 날짜보다 빠를 수 없습니다.");
+      return;
+    }
+    setEndDate(value);
+  };
+
+  const handleStartDateChange = (value: string) => {
+    setStartDate(value);
+    // 시작일을 기존 종료일보다 뒤로 옮기면 종료일이 무효가 되므로 비우고 알린다.
+    if (value && endDate && endDate < value) {
+      setEndDate("");
+      onError("시작 날짜가 종료 날짜보다 늦어 종료 날짜를 다시 선택해주세요.");
+    }
+  };
+
   const companions = [
     { label: "혼자", icon: "person" },
     { label: "친구", icon: "group" },
@@ -276,7 +295,7 @@ export default function PlannerFlow({ onPlanGenerated, onError }: PlannerFlowPro
                   <input
                     type="date"
                     value={startDate}
-                    onChange={(e) => setStartDate(e.target.value)}
+                    onChange={(e) => handleStartDateChange(e.target.value)}
                     className="w-full bg-transparent border-none py-4 pl-12 pr-4 rounded-xl focus:ring-0 text-on-surface font-body-md outline-none"
                   />
                 </div>
@@ -293,7 +312,8 @@ export default function PlannerFlow({ onPlanGenerated, onError }: PlannerFlowPro
                   <input
                     type="date"
                     value={endDate}
-                    onChange={(e) => setEndDate(e.target.value)}
+                    min={startDate || undefined}
+                    onChange={(e) => handleEndDateChange(e.target.value)}
                     className="w-full bg-transparent border-none py-4 pl-12 pr-4 rounded-xl focus:ring-0 text-on-surface font-body-md outline-none"
                   />
                 </div>
