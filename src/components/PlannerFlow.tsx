@@ -590,7 +590,7 @@ export default function PlannerFlow({ onPlanGenerated, onError }: PlannerFlowPro
           <button
             onClick={() => {
               if (step === 1 && !destination.trim()) {
-                alert("목적지를 입력해주세요!");
+                onError("목적지를 입력해주세요!");
                 return;
               }
               setStep(step + 1);

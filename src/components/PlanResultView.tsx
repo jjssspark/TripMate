@@ -397,7 +397,7 @@ export default function PlanResultView({
         await onUpdatePlan(plan);
       }
       setIsEditing(false);
-      alert("변경 사항이 성공적으로 저장되었습니다!");
+      onShowToast?.("변경 사항이 저장되었습니다.", "success");
     } catch (err) {
       console.error(err);
     } finally {

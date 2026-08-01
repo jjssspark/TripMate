@@ -381,7 +381,7 @@ export default function App() {
         }
       } catch (err: any) {
         console.error("Failed to delete in Supabase. Falling back to local.", err);
-        alert(`Supabase 삭제 문제 (${err.message || err}). 로컬 백업에서 직접 지우기를 진행합니다.`);
+        showToast("클라우드 삭제에 실패해 이 기기에서만 삭제합니다.", "error");
       }
     }
 
@@ -401,7 +401,7 @@ export default function App() {
       }
     } catch (err) {
       console.error("Error deleting plan from localStorage:", err);
-      alert("일정을 삭제하는 중 문제가 발생했습니다.");
+      showToast("일정을 삭제하는 중 문제가 발생했습니다.", "error");
     }
   };
 
