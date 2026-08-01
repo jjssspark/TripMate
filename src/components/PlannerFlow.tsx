@@ -16,26 +16,27 @@ export default function PlannerFlow({ onPlanGenerated, onError }: PlannerFlowPro
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
 
-  // Form Fields (테스트용 기본값 설정)
-  const [tripTitle, setTripTitle] = useState("대전으로 떠나는 먹방 여행");
-  const [destination, setDestination] = useState("대전");
-  const [startDate, setStartDate] = useState("2026-06-10");
-  const [endDate, setEndDate] = useState("2026-06-12");
+  // Form Fields — 사용자가 직접 입력한다. 기본값을 넣지 않는다.
+  const [tripTitle, setTripTitle] = useState("");
+  const [destination, setDestination] = useState("");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  // 단일 선택 항목은 하나를 기본으로 둔다 (미선택 상태를 허용하면 별도 검증이 필요해진다)
   const [companion, setCompanion] = useState("혼자");
 
   // 인기 여행지 자동완성 드롭다운
   const [showDestSuggestions, setShowDestSuggestions] = useState(false);
 
   // Preference styles (multiple select)
-  const [styles, setStyles] = useState<string[]>(["맛집", "자연"]);
+  const [styles, setStyles] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState("");
-  const [mustVisitPlaces, setMustVisitPlaces] = useState<string[]>(["성심당", "한밭수목원"]);
+  const [mustVisitPlaces, setMustVisitPlaces] = useState<string[]>([]);
   const [budget, setBudget] = useState("표준형");
   const [intensity, setIntensity] = useState("여유롭게");
   const [transportMode, setTransportMode] = useState("대중교통");
 
   // Extra details
-  const [comments, setComments] = useState("넉넉한 여행 스케쥴");
+  const [comments, setComments] = useState("");
 
   const popularDestinations = [
     "서울", "부산", "제주도", "강릉", "여수", "경주",
@@ -589,9 +590,19 @@ export default function PlannerFlow({ onPlanGenerated, onError }: PlannerFlowPro
         {step < 3 ? (
           <button
             onClick={() => {
-              if (step === 1 && !destination.trim()) {
-                onError("목적지를 입력해주세요!");
-                return;
+              if (step === 1) {
+                if (!destination.trim()) {
+                  onError("목적지를 입력해주세요.");
+                  return;
+                }
+                if (!startDate || !endDate) {
+                  onError("여행 시작일과 종료일을 선택해주세요.");
+                  return;
+                }
+                if (endDate < startDate) {
+                  onError("종료일은 시작일보다 빠를 수 없습니다.");
+                  return;
+                }
               }
               setStep(step + 1);
             }}
