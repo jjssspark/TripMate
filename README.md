@@ -101,7 +101,7 @@ AI 기술을 활용하여 사용자의 취향과 일정에 맞는 최적의 여�
 
 ### 1. 프로젝트 복사
 ```bash
-git clone https://github.com/rhantj/TripMate.git
+git clone https://github.com/jjssspark/TripMate.git
 cd TripMate
 ```
 
@@ -111,17 +111,54 @@ npm install
 ```
 
 ### 3. 환경 변수 설정
-루트 디렉토리에 `.env` 파일을 생성하고 아래의 정보를 추가합니다.
-```env
-VITE_SUPABASE_URL=your_supabase_project_url
-VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
-VITE_GEMINI_API_KEY=your_gemini_api_key
+템플릿을 복사한 뒤 실제 값을 채웁니다. 각 키의 발급처와 클라이언트 노출 여부는 [`.env.example`](.env.example)에 주석으로 정리돼 있습니다.
+
+```bash
+cp .env.example .env
 ```
+
+| 키 | 노출 범위 | 필수 | 용도 |
+| :--- | :--- | :--- | :--- |
+| `VITE_SUPABASE_URL` | 클라이언트 | ✅ | Supabase 프로젝트 URL |
+| `VITE_SUPABASE_ANON_KEY` | 클라이언트 | ✅ | Supabase anon public key (RLS 보호) |
+| `GEMINI_API_KEY` | 서버 전용 | ✅ | AI 일정 생성·수정 |
+| `GOOGLE_PLACES_API_KEY` | 서버 전용 | — | 장소 사진 조회. 없으면 사진 없이 동작 |
+| `PORT` | 서버 전용 | — | 로컬 dev 서버 포트 (기본 3000) |
+
+> `VITE_` 접두사가 붙은 값은 브라우저 번들에 그대로 포함됩니다. Gemini와 Places 키는 접두사 없이 두어 서버에만 남도록 했습니다.
 
 ### 4. 로컬 서버 실행
 ```bash
-npm run dev
+npm run dev        # Express + Vite 개발 서버 (http://localhost:3000)
 ```
+
+### 그 외 명령어
+```bash
+npm run build      # 프로덕션 빌드 (dist/)
+npm run typecheck  # 타입 검사
+npm run lint       # ESLint
+```
+
+---
+
+## 📁 프로젝트 구조
+
+```
+├── index.html            React 앱 진입점
+├── landing.html          랜딩 페이지 (React 미포함, /로 서빙)
+├── src/
+│   ├── components/       화면 단위 컴포넌트 11개
+│   ├── lib/              Supabase 클라이언트, 일정 표시 유틸
+│   └── types.ts          공용 타입
+├── server/server.ts      로컬 개발용 Express + Vite 미들웨어
+├── netlify/functions/    운영용 서버리스 API 4종
+├── public/               정적 자산 (favicon, PWA 아이콘)
+└── docs/
+    ├── ARCHITECTURE.md   구조와 설계 판단 근거
+    └── DESIGN.md         디자인 토큰
+```
+
+구조와 설계 의도는 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)에 정리했습니다.
 
 ---
 
@@ -130,4 +167,11 @@ npm run dev
 본 프로젝트는 **Netlify**를 통해 배포 및 지속적 통합(CI/CD)이 관리됩니다.
 *   빌드 명령어: `npm run build`
 *   빌드 디렉토리: `dist`
-*   환경변수 주입: Netlify Dashboard -> Site settings -> Environment variables에 Supabase 및 API 키 세팅 완료.
+*   환경변수 주입: Netlify Dashboard → Site settings → Environment variables
+*   `/api/*` 요청은 `netlify.toml`의 리다이렉트 규칙에 따라 서버리스 함수로 전달됩니다.
+
+---
+
+## 📄 라이선스
+
+[MIT](LICENSE)
