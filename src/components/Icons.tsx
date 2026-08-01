@@ -39,7 +39,6 @@ import {
   Edit,
   Save,
   Rocket,
-  Plus as CustomPlus,
 } from "lucide-react";
 
 export function ExploreIcon({ className }: { className?: string }) {

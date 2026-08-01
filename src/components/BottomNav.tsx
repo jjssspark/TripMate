@@ -3,8 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { ExploreIcon, PersonIcon, SearchIcon, RocketIcon } from "./Icons";
-
 interface BottomNavProps {
   activeTab: string;
   setActiveTab: (tab: string) => void;

@@ -15,7 +15,7 @@ import PlanResultView from "./components/PlanResultView";
 import MyTripsView from "./components/MyTripsView";
 import ProfileView from "./components/ProfileView";
 import Toast from "./components/Toast";
-import { SearchIcon, LocationIcon, BookmarkIcon } from "./components/Icons";
+import { SearchIcon, LocationIcon } from "./components/Icons";
 import {
   getSupabaseConfig,
   getSupabaseClient,
@@ -26,7 +26,18 @@ import {
 } from "./lib/supabaseClient";
 
 export default function App() {
-  const [session, setSession] = useState<UserSession | null>(null);
+  // 저장된 세션은 첫 렌더 전에 읽는다. effect에서 setState 하면 비로그인 화면이
+  // 한 프레임 보였다가 바뀌는 깜빡임이 생긴다.
+  const [session, setSession] = useState<UserSession | null>(() => {
+    const stored = localStorage.getItem("tripmate_session");
+    if (!stored) return null;
+    try {
+      return JSON.parse(stored) as UserSession;
+    } catch (err) {
+      console.error("Error parsing stored session:", err);
+      return null;
+    }
+  });
   // 탭 히스토리 스택: 하단 메인 탭(home/my_trips/search/profile)은 형제 탭 전환이라 스택을 초기화하고,
   // planner/plan_result 같은 하위 플로우 화면은 스택에 쌓아서 뒤로가기로 이전 화면에 돌아갈 수 있게 함
   const [navStack, setNavStack] = useState<string[]>(["home"]);
@@ -41,19 +52,6 @@ export default function App() {
   const showToast = (message: string, type: "success" | "error") => {
     setToast({ message, type });
   };
-
-  // Retrieve user session and fetch plans on load (Mock 모드 폴백)
-  useEffect(() => {
-    const stored = localStorage.getItem("tripmate_session");
-    if (stored) {
-      try {
-        const u: UserSession = JSON.parse(stored);
-        setSession(u);
-      } catch (err) {
-        console.error("Error parsing stored session:", err);
-      }
-    }
-  }, []);
 
   // Supabase Auth 세션 구독: 새로고침 시 세션 복구, 토큰 자동 갱신,
   // 그리고 소셜 로그인(OAuth) 리다이렉트 이후 세션을 실제로 반영하기 위한 리스너

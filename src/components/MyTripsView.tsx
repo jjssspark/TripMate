@@ -5,7 +5,7 @@
 
 import React from "react";
 import { TravelPlan, UserSession } from "../types";
-import { TrashIcon, ShareIcon, LocationIcon } from "./Icons";
+import { TrashIcon, LocationIcon } from "./Icons";
 import { getSupabaseConfig } from "../lib/supabaseClient";
 import { getPlanCoverImage } from "../lib/planDisplay";
 

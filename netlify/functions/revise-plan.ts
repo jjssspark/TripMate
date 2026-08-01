@@ -117,7 +117,7 @@ export const handler = async (event: any) => {
   let body: any;
   try {
     body = JSON.parse(event.body || "{}");
-  } catch (err) {
+  } catch {
     return { statusCode: 400, headers, body: JSON.stringify({ success: false, message: "Invalid JSON body" }) };
   }
 

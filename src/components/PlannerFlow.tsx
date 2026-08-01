@@ -5,7 +5,7 @@
 
 import React, { useState } from "react";
 import { TravelPlan } from "../types";
-import { ArrowLeftIcon, ArrowRightIcon, SparklesIcon, EditIcon, LocationIcon, CalendarIcon, UsersIcon } from "./Icons";
+import { ArrowLeftIcon, ArrowRightIcon, SparklesIcon, EditIcon, LocationIcon, CalendarIcon } from "./Icons";
 
 interface PlannerFlowProps {
   onPlanGenerated: (plan: TravelPlan) => void;

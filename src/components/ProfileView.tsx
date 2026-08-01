@@ -9,7 +9,6 @@ import {
   BellIcon,
   LogOutIcon,
   SparklesIcon,
-  PersonIcon,
   SettingsIcon,
   CheckIcon,
 } from "./Icons";
@@ -178,25 +177,15 @@ export default function ProfileView({
   const [receiveSms, setReceiveSms] = useState(false);
 
   // Supabase connection keys local states
-  const [supabaseUrl, setSupabaseUrl] = useState("");
-  const [supabaseKey, setSupabaseKey] = useState("");
-  const [dbMode, setDbMode] = useState<"local" | "supabase">("local");
+  // 저장된 설정은 첫 렌더 전에 읽는다 (effect에서 setState 하면 빈 입력창이 한 프레임 보인다)
+  const [initialConfig] = useState(getSupabaseConfig);
+  const [supabaseUrl, setSupabaseUrl] = useState(initialConfig.url);
+  const [supabaseKey, setSupabaseKey] = useState(initialConfig.anonKey);
+  const [dbMode, setDbMode] = useState<"local" | "supabase">(initialConfig.active ? "supabase" : "local");
   const [dbStatus, setDbStatus] = useState<"disconnected" | "connected" | "error">("disconnected");
   const [statusMessage, setStatusMessage] = useState("");
   const [sqlCopied, setSqlCopied] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
-
-  // Load existing credentials on component mount
-  useEffect(() => {
-    const config = getSupabaseConfig();
-    setSupabaseUrl(config.url);
-    setSupabaseKey(config.anonKey);
-    setDbMode(config.active ? "supabase" : "local");
-
-    if (config.active) {
-      testSupabaseConnection(config.url, config.anonKey);
-    }
-  }, []);
 
   const testSupabaseConnection = async (url: string, key: string) => {
     if (!url || !key) {
@@ -237,6 +226,18 @@ export default function ProfileView({
       setStatusMessage(`오류 발생: ${err.message || "자격 증명을 확인해 주세요."}`);
     }
   };
+
+  // 저장된 설정이 이미 Supabase 모드면 마운트 시 실제 연결을 확인한다.
+  // testSupabaseConnection 선언 이후에 두어야 참조 순서가 맞는다.
+  useEffect(() => {
+    if (initialConfig.active) {
+      // 네트워크 검증이라는 실제 부수효과이므로 effect가 맞는 자리다.
+      // 진행 상태를 즉시 노출해야 해서 동기 setState가 불가피하다.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      testSupabaseConnection(initialConfig.url, initialConfig.anonKey);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 마운트 시 1회만 실행
+  }, []);
 
   const handleSaveConfig = async (e: React.FormEvent) => {
     e.preventDefault();

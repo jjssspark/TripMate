@@ -31,7 +31,7 @@ function fetchCoordinatesFromOSM(searchQuery: string): Promise<{ lat: number; lo
             }
           }
           resolve(null);
-        } catch (e) {
+        } catch {
           resolve(null);
         }
       });

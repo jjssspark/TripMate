@@ -4,8 +4,8 @@
  */
 
 import { useState, useEffect, useRef } from "react";
-import { TravelPlan, ItineraryDay, ItineraryActivity } from "../types";
-import { EditIcon, ShareIcon, BookmarkIcon, SaveIcon, InfoIcon, LightbulbIcon, PlusCircleIcon, TrashIcon, CheckIcon, ArrowLeftIcon } from "./Icons";
+import { TravelPlan, ItineraryActivity } from "../types";
+import { EditIcon, ShareIcon, BookmarkIcon, PlusCircleIcon, TrashIcon, CheckIcon, ArrowLeftIcon } from "./Icons";
 import { setPlanShared } from "../lib/supabaseClient";
 
 interface FeedbackMessage {

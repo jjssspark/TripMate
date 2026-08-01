@@ -15,7 +15,12 @@ export default function Toast({ message, type, onClose }: ToastProps) {
   // onClose가 부모 리렌더링마다 새로 생성되는 인라인 함수여도 타이머가 리셋되지
   // 않도록, 최신 콜백은 ref로 추적하고 타이머 자체는 마운트 시 1회만 예약한다.
   const onCloseRef = useRef(onClose);
-  onCloseRef.current = onClose;
+
+  // ref 대입은 렌더가 아니라 커밋 이후에 해야 한다. 렌더 중 수정하면
+  // Strict Mode / 동시성 렌더링에서 값이 어긋날 수 있다.
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  });
 
   useEffect(() => {
     const timer = setTimeout(() => onCloseRef.current(), 3000);
