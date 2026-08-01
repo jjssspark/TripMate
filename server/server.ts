@@ -499,7 +499,7 @@ app.post("/api/generate-plan", async (req, res) => {
       try {
         console.log("Retrying with backup model: gemini-2.5-flash-lite...");
         response = await generateWithModel("gemini-2.5-flash-lite");
-      } catch (backupErr: any) {
+      } catch {
         console.warn(`[TripMate AI] Backup model (gemini-2.5-flash-lite) also failed. Trying gemini-2.5-flash one last time...`);
         await sleep(1000);
         response = await generateWithModel("gemini-2.5-flash");
@@ -765,7 +765,7 @@ function fetchCoordinatesFromOSM(searchQuery: string): Promise<{ lat: number; lo
             }
           }
           resolve(null);
-        } catch (e) {
+        } catch {
           resolve(null);
         }
       });

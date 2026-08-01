@@ -12,6 +12,9 @@ dist
 dist-ssr
 *.local
 
+# 배포 산출물 (Netlify CLI 로컬 상태 — siteId 포함)
+.netlify/
+
 # Environment variables
 .env
 .env.production
@@ -39,3 +42,6 @@ __pycache__/
 .DS_Store
 .pytest_cache/
 .ruff_cache/
+
+# 로컬 dev 서버(server.ts)의 파일 DB — 런타임에 자동 생성됨
+data/
