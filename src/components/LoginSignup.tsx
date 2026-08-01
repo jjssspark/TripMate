@@ -14,8 +14,8 @@ interface LoginSignupProps {
 
 export default function LoginSignup({ onLoginSuccess }: LoginSignupProps) {
   const [isLogin, setIsLogin] = useState(true);
-  const [email, setEmail] = useState("3team@tripmate.ai");
-  const [password, setPassword] = useState("12345678");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [name, setName] = useState("");
   const [agreeTerms, setAgreeTerms] = useState(false);
@@ -239,7 +239,7 @@ export default function LoginSignup({ onLoginSuccess }: LoginSignupProps) {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="w-full h-12 pl-12 pr-4 bg-surface-container-low border-0 rounded-lg text-body-md focus:ring-2 focus:ring-primary-container focus:bg-white transition-all outline-none"
-                placeholder="example@tripmate.ai"
+                placeholder="이메일 주소를 입력하세요"
               />
             </div>
           </div>
