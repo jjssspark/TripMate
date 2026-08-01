@@ -53,8 +53,8 @@ export default function App() {
     setToast({ message, type });
   };
 
-  // Supabase Auth 세션 구독: 새로고침 시 세션 복구, 토큰 자동 갱신,
-  // 그리고 소셜 로그인(OAuth) 리다이렉트 이후 세션을 실제로 반영하기 위한 리스너
+  // Supabase Auth 세션 구독: 새로고침 시 세션 복구와 토큰 자동 갱신을 위한 리스너
+  // (인증 수단은 이메일/비밀번호 하나뿐이다)
   useEffect(() => {
     const config = getSupabaseConfig();
     if (!config.active) return;

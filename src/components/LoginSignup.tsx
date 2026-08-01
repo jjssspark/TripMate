@@ -174,36 +174,6 @@ export default function LoginSignup({ onLoginSuccess }: LoginSignupProps) {
     }
   };
 
-  const handleSocialClick = async (platform: string) => {
-    const client = getSupabaseClient();
-    if (client) {
-      try {
-        const { error: oauthErr } = await client.auth.signInWithOAuth({
-          provider: platform as any,
-          options: {
-            redirectTo: window.location.origin
-          }
-        });
-        if (oauthErr) throw oauthErr;
-      } catch (err: any) {
-        console.error("Social login redirect failed:", err);
-        alert(`소셜 로그인 시도 중 에러 발생: ${err.message}`);
-      }
-      return;
-    }
-
-    // Fallback Mock social logins
-    const mockSession: UserSession = {
-      id: `user-${platform}`,
-      email: `${platform}@tripmate.ai`,
-      name: platform === "google" ? "알렉스 리베라" : platform === "kakao" ? "카카오 멤버" : "네이버 멤버",
-      userSeq: 1,
-      avatarUrl: "https://lh3.googleusercontent.com/aida-public/AB6AXuBCJRKcrw8jYy6nRr-YP0mvfcdQCZGulGdyzi2gnMfUv5adXdsvwJ-c6la6y17w3AVwz4CqHMb-ZOdjLMlclo8dS8bpakpQFAZ9V3DJZOctvzYBXd1rQF045DpAAel7e2tvMbOyA_iREPNt2Z0KfV9wRfJI6LpNzyocB3j3Zr2VyvTf6bHPZCwVk1J5MmxTf3rT476oiTNPeJV9KJ5atyNQRlm2I2gVLZU8rTcbp9flnrLAClH3tub8DCtmZGU2Ef9nAUcyb-PfuaU"
-    };
-    localStorage.setItem("tripmate_session", JSON.stringify(mockSession));
-    onLoginSuccess(mockSession);
-  };
-
   return (
     <div className="w-full max-w-[440px] mx-auto py-12 px-6 flex flex-col items-center">
       {/* Logo Header */}
@@ -355,48 +325,6 @@ export default function LoginSignup({ onLoginSuccess }: LoginSignupProps) {
           </button>
         </form>
 
-        {/* OR Separator */}
-        <div className="flex items-center my-6 gap-3">
-          <div className="h-[1px] flex-1 bg-outline-variant/30"></div>
-          <span className="font-label-sm text-label-sm text-outline select-none">
-            또는 다음으로 가입
-          </span>
-          <div className="h-[1px] flex-1 bg-outline-variant/30"></div>
-        </div>
-
-        {/* Social Sign-up */}
-        <div className="flex items-center justify-center gap-4">
-          <button
-            onClick={() => handleSocialClick("google")}
-            className="w-12 h-12 rounded-full border border-outline-variant flex items-center justify-center bg-white hover:bg-surface-container-low transition-all active:scale-95 overflow-hidden p-0 cursor-pointer"
-          >
-            <img
-              alt="Google"
-              className="w-6 h-6 object-cover"
-              src="https://lh3.googleusercontent.com/aida-public/AB6AXuDPaGXugvGK6eU4pbF2iLH8T1UX34-YnTnHDfcbej6wjmvO0YDKVqva0EQiQHlkx6e5ZsBw-59hKPHTBqkn-9vBREMgRpxjtrhWL3gkPjQmKXDgAwgD54VsXJBYVdW0LJauJcfD7-sCnG5MGzeMsM1tzfeddpAJfdyrPczPka4pzMqUarKnKYUMKxTPiPmrdRexgPd0H5GkAZi667L_QJaueQIgeRYzwIy-vsAnC5QK_uZ3Iqr2bAqPya15RV8i6rA59JlDG68MIrc"
-            />
-          </button>
-          <button
-            onClick={() => handleSocialClick("kakao")}
-            className="w-12 h-12 rounded-full border border-outline-variant flex items-center justify-center bg-white hover:bg-surface-container-low transition-all active:scale-95 overflow-hidden p-0 cursor-pointer"
-          >
-            <img
-              alt="Kakao"
-              className="w-6 h-6 object-cover"
-              src="https://lh3.googleusercontent.com/aida-public/AB6AXuCLe5J0jq_L-C9qPTvWpKnfYivbhtlc5mX1QtiXL-5rPKHiirhvSQ-LCd_3DzRsJPW7uPFEbTkJq1dlJs-q6AR2jg1ymNRwSmi9L4JHTYCvDTrN5YTedg2TEQxz7NqeDkFt_4DOwiRanJIEhsSctSwGMyy8_2zc9TB3AqoFJs0uqcCkntma41_z-bu5RSchh7yHTBdfNZajesmC0jaCrMZGFKpWX6bY_isKXr1ELKvV4cfsECGugrJXoKB5N7iuc9LHPg1mbDtv948"
-            />
-          </button>
-          <button
-            onClick={() => handleSocialClick("naver")}
-            className="w-12 h-12 rounded-full border border-outline-variant flex items-center justify-center bg-white hover:bg-surface-container-low transition-all active:scale-95 overflow-hidden p-0 cursor-pointer"
-          >
-            <img
-              alt="Naver"
-              className="w-6 h-6 object-cover"
-              src="https://lh3.googleusercontent.com/aida-public/AB6AXuAgtfUakLLY7zztm6c1yOMLkl_0e1wORmTCxta4caDm6eVrayxO8aQ8ZpqGlcIrwlE8nQt-PnbH0OWxocQPEqZLVSM__2wO7S8TD8nWXrM_wD6G5YkI3riEQREFKbfK93uqDvX_bXVojuV5IYnj--QXMPzCymprAN5KE28XjcOqc-lMEDb2yGeYQJRpOjFHps5Cgwt45Spi_obGGKM5bfYnQ68OaHdMeyUpIeLj2oXt7JhRax2pyWWwPCX7jIO9NS56yJI7R3vzezg"
-            />
-          </button>
-        </div>
       </div>
 
       {/* Toggle View Footer */}

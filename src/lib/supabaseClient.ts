@@ -88,8 +88,8 @@ export async function buildUserSession(
     };
   }
 
-  // users 테이블에 이 인증 사용자의 행이 아직 없는 경우 (예: 소셜 로그인은 회원가입 폼을
-  // 거치지 않아 users insert가 한 번도 실행되지 않음) 여기서 직접 생성한다.
+  // users 테이블에 이 인증 사용자의 행이 아직 없는 경우 (예: 회원가입 도중 users insert가
+  // 실패했거나, 이 로직이 생기기 전에 만들어진 계정) 여기서 직접 생성한다.
   // travel_plans 등의 RLS INSERT 정책은 "user_seq가 이 auth.uid()의 users 행에 속하는지"를
   // 검사하므로, 이 행이 없으면 이후 모든 저장이 user_seq 불일치로 막히게 된다.
   const fallbackName = authUser.email?.split("@")[0] || "여행자";
