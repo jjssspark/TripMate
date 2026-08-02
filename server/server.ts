@@ -11,6 +11,9 @@ import fs from "fs";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type } from "@google/genai";
 import dotenv from "dotenv";
+// 폴백 일정에서도 실제 명소 이름을 쓰기 위해 프론트와 같은 목록을 공유한다.
+// (중복 정의하면 이 프로젝트가 이미 겪은 server/netlify 프롬프트 드리프트가 또 생긴다)
+import { getRecommendedSpots } from "../src/lib/recommendedSpots";
 
 dotenv.config();
 
@@ -285,6 +288,7 @@ app.post("/api/generate-plan", async (req, res) => {
     companion,
     budget,
     intensity,
+    transportMode,
     styles,
     mustVisitPlaces,
     comments
@@ -316,12 +320,20 @@ app.post("/api/generate-plan", async (req, res) => {
     const fallbackDays = [];
     const spotCategories = ["관광", "자연", "카페", "쇼핑", "관광"];
 
+    // 폴백이라도 "인기 명소 1" 같은 이름은 내보내지 않는다. 국내 목적지 100곳의 실제 명소 목록을 쓰고,
+    // 목록에 없는 지명이면 번호 대신 목적지 이름만 남긴다.
+    const knownSpots = getRecommendedSpots(destination);
+    const spotNameFor = (dayNo: number, spotIdx: number) =>
+      knownSpots.length > 0
+        ? knownSpots[(dayNo - 1 + spotIdx) % knownSpots.length]
+        : `${destination} 대표 명소`;
+
     for (let d = 1; d <= dCount; d++) {
       const activities: any[] = [];
 
       activities.push({
         time: "오전 08:00",
-        title: `${destination} 로컬 조식 맛집`,
+        title: `${destination} 아침 식사`,
         description: "하루를 든든하게 시작할 수 있는 현지인 추천 조식 맛집에서 아침 식사를 즐깁니다.",
         location: `${destination} 시내`,
         category: "맛집",
@@ -341,9 +353,11 @@ app.post("/api/generate-plan", async (req, res) => {
 
         activities.push({
           time: `${period} ${String(displayHour).padStart(2, "0")}:30`,
-          title: isFirstMustVisit ? mustVisitPlaces : `${destination} 인기 명소 ${s + 1}`,
-          description: "여행 가이드북 추천 스팟으로 여유롭게 둘러보기 좋은 곳입니다.",
-          location: `${destination} 명소 구역`,
+          title: isFirstMustVisit ? mustVisitPlaces : spotNameFor(d, s),
+          description: knownSpots.length > 0
+            ? `${destination}을(를) 대표하는 ${spotNameFor(d, s)}입니다. 시간을 넉넉히 두고 둘러보세요.`
+            : `${destination}에서 놓치기 아까운 곳입니다.`,
+          location: destination,
           category: spotCategories[s % spotCategories.length],
           isMeal: false,
           mustVisit: isFirstMustVisit,
@@ -401,6 +415,8 @@ app.post("/api/generate-plan", async (req, res) => {
       styles: styles || ["맛집", "자연"],
       mustVisitPlaces: mustVisitPlaces || "",
       planContent: fallbackDays,
+      // 이 일정은 AI가 만든 게 아니다. 클라이언트가 사용자에게 알릴 수 있도록 표시한다.
+      isFallback: true,
     };
   };
 
@@ -421,6 +437,7 @@ app.post("/api/generate-plan", async (req, res) => {
 - 선호하는 스타일 키워드들: ${Array.isArray(styles) ? styles.join(", ") : styles}
 - 반드시 꼭 방문해야 할 장소 (Must-Visit): ${mustVisitPlaces}
 - 여행 강도: ${intensity || "여유롭게"}
+- 이동수단: ${transportMode || "대중교통"}
 - 추가 요청 및 피드백 메모사항: ${comments || "없음"}
 
 [동선 설계 안내 및 제약사항]
@@ -429,9 +446,16 @@ app.post("/api/generate-plan", async (req, res) => {
 3. 결과적으로 하루 activities 배열의 총 개수는 식사 3개 + 일반 활동 ${spotRange.min}~${spotRange.max}개 = ${spotRange.min + 3}~${spotRange.max + 3}개여야 합니다.
 4. 맛집이나 카페 스타일을 선호하는 경우 식사 시간대 장소 선정에 그 취향을 반영하세요.
 5. 요청한 필수 방문 장소([Must-Visit])가 있다면, 일치하는 활동에서  "mustVisit": true 로 설정하고 실제 여행 일정에 반드시 포함하세요.
-6. 설명은 여행 가이드북처럼 구체적이고 현지 감성을 살려 팁과 정겨운 톤("~를 강력 추천합니다", "~를 만끽해보세요" 처럼 존댓말 한글)으로 작성해주세요.
+6. description은 여행 가이드북 톤의 존댓말 한글로, 다만 **2~3문장 / 120자 이내**로 간결하게 쓰세요. 길게 늘여 쓰면 응답이 느려져 사용자가 기다리게 됩니다. 미사여구보다 그 장소에서 뭘 하면 좋은지, 뭘 먹으면 좋은지 같은 실용 정보를 넣으세요.
 7. 모든 장소 활동(activities)에 대해 지도로 표현하고 이동 선을 그릴 수 있도록 실제 위도(latitude)와 경도(longitude) 값(실수형 숫자 형태)을 유추하여 반드시 포함시켜주세요. (예: 대전 성심당 본점인 경우 36.3276, 127.4272)
 8. 모든 장소의 title은 실제로 존재하는 구체적인 상호명(가게 이름)으로 작성하세요. 특히 category가 "맛집", "카페", "숙소"인 경우 "현지맛집", "로컬 카페", "소문난 맛집"처럼 일반명사로 뭉뚱그리지 말고, 목적지에서 실제로 유명하거나 평점이 좋은 구체적인 상호를 정확히 명시하세요. (예: "대전 로컬 맛집"이 아니라 "성심당 본점", "태평소국밥")
+
+9. [동선] 같은 날짜(Day)의 활동은 반드시 지리적으로 인접한 하나의 권역으로 묶으세요. 하루 안에서 도시의 반대편으로 갔다가 되돌아오는 배치는 금지합니다. 날짜별로 권역을 나누어(예: 1일차 시내권, 2일차 해안권, 3일차 산악권) 이동 낭비를 없애세요.
+10. [동선] 사용자가 선택한 이동수단은 "${transportMode || "대중교통"}"입니다. 도보면 각 장소가 도보 15~20분(약 1km) 이내, 대중교통이면 30분 이내, 자차면 40분 이내로 이어지도록 배치하세요. 불가피하게 그보다 먼 이동이 생기면 그 이동 자체를 category "이동" 활동으로 넣어 사용자가 예상할 수 있게 하세요.
+11. [동선] 하루의 활동은 실제로 이동할 순서 그대로, 앞뒤 장소가 서로 가장 가까운 순서가 되도록 시간 순 정렬하세요. 점심은 오전 마지막 장소 근처에서, 저녁은 오후 마지막 장소 근처에서 고르세요. 식사만을 위해 멀리 이동시키지 마세요.
+12. [실명 필수] title에는 실제로 존재하는 고유한 상호명·지명만 쓰세요. 다음 같은 일반명사나 번호 붙은 표현은 절대 금지합니다: "인기 명소 1", "로컬 맛집", "현지 카페", "소문난 맛집", "전망 좋은 곳", "추천 스팟", "OO 시내". 검색하면 실제로 나오는 이름(예: "성심당 본점", "감천문화마을", "우진해장국", "카페 서연의집")만 사용하세요.
+13. [실명 필수] 맛집·카페는 그 지역에서 실제로 유명하거나 현지인이 즐겨 찾는 곳으로 고르고, description에 그 집의 대표 메뉴를 최소 한 가지 구체적으로 적으세요. (예: "우진해장국의 고사리해장국")
+14. [실명 필수] 특정 상권이나 거리(예: "해장국거리", "먹자골목", "카페거리")를 추천하고 싶다면, title에는 그 안의 대표 가게 하나의 실제 상호를 쓰고 거리 이름은 location에 넣으세요. title이 거리·상권 이름으로 끝나서는 안 됩니다. description에서 특정 가게 이름을 언급했다면 그 가게가 title이어야 합니다.
 
 반드시 명시된 JSON 스키마를 준수하여 응답해 주세요.`;
 
@@ -487,25 +511,50 @@ app.post("/api/generate-plan", async (req, res) => {
   // 비동기 대기를 위한 헬퍼 함수 정의
   const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+  // 사용자를 30초 넘게 기다리게 하지 않는다. 아래 예산 안에서만 재시도하고,
+  // 예산을 넘기면 폴백 일정을 돌려준다. (클라이언트는 30초에 요청을 끊는다)
+  const GENERATION_BUDGET_MS = 27_000;
+  const startedAt = Date.now();
+  const remainingMs = () => GENERATION_BUDGET_MS - (Date.now() - startedAt);
+
+  // 외부 호출은 스스로 멈추지 않는다. 남은 예산만큼만 기다리고 초과하면 거절한다.
+  const withTimeout = <T,>(task: Promise<T>, ms: number, label: string): Promise<T> =>
+    new Promise<T>((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error(`${label}: ${ms}ms 안에 응답이 오지 않음`)), ms);
+      task.then(
+        (value) => { clearTimeout(timer); resolve(value); },
+        (err) => { clearTimeout(timer); reject(err); },
+      );
+    });
+
   try {
     let response;
     try {
       console.log("Attempting generation with primary model: gemini-2.5-flash...");
-      response = await generateWithModel("gemini-2.5-flash");
+      // 재시도는 503처럼 빠르게 실패했을 때만 의미가 있다. 타임아웃으로 실패하면 어차피
+      // 남은 예산이 없으므로, 주 모델에 예산 대부분을 주고 재시도는 남는 시간으로만 한다.
+      response = await withTimeout(generateWithModel("gemini-2.5-flash"), remainingMs() - 3_000, "주 모델");
     } catch (primaryErr: any) {
       console.warn(`[TripMate AI] Primary model (gemini-2.5-flash) failed: ${primaryErr.message || primaryErr}`);
-      console.log("Waiting 1.5 seconds to bypass temporary API traffic spikes...");
 
-      // 1.5초 대기 후 백업 모델로 시도하여 구글 측 일시적 503 부하 우회
+      // 재시도에는 최소한의 여유가 필요하다. 남은 예산이 모자라면 바로 폴백으로 넘어간다.
+      if (remainingMs() < 7_000) {
+        throw new Error(`남은 시간(${remainingMs()}ms)이 부족해 재시도를 건너뜀`, { cause: primaryErr });
+      }
+
+      console.log("Waiting 1.5 seconds to bypass temporary API traffic spikes...");
       await sleep(1500);
 
       try {
         console.log("Retrying with backup model: gemini-2.5-flash-lite...");
-        response = await generateWithModel("gemini-2.5-flash-lite");
-      } catch {
+        response = await withTimeout(generateWithModel("gemini-2.5-flash-lite"), remainingMs() - 2_000, "보조 모델");
+      } catch (backupErr) {
         console.warn(`[TripMate AI] Backup model (gemini-2.5-flash-lite) also failed. Trying gemini-2.5-flash one last time...`);
+        if (remainingMs() < 5_000) {
+          throw new Error(`남은 시간(${remainingMs()}ms)이 부족해 마지막 시도를 건너뜀`, { cause: backupErr });
+        }
         await sleep(1000);
-        response = await generateWithModel("gemini-2.5-flash");
+        response = await withTimeout(generateWithModel("gemini-2.5-flash"), remainingMs() - 1_000, "주 모델 최종 시도");
       }
     }
 
@@ -524,22 +573,40 @@ app.post("/api/generate-plan", async (req, res) => {
     const daysContent = JSON.parse(cleanedText);
 
     // Enhance images: Google Places 실사진을 우선 조회하고, 키가 없거나 못 찾으면 카테고리 목업 이미지로 폴백
-    const enhancedDays = await Promise.all(
-      daysContent.map(async (dayObj: any) => {
+    const enrichWithPhotos = async () =>
+      Promise.all(
+        daysContent.map(async (dayObj: any) => {
+          if (Array.isArray(dayObj.activities)) {
+            dayObj.activities = await Promise.all(
+              dayObj.activities.map(async (act: any, idx: number) => {
+                const photoRef = await fetchRealPlacePhotoRef(act.title, destination);
+                act.imageUrl = photoRef
+                  ? `/api/place-photo?ref=${encodeURIComponent(photoRef)}`
+                  : getMockupImage(act.category, destination, idx);
+                return act;
+              })
+            );
+          }
+          return dayObj;
+        })
+      );
+
+    // 실사진은 부가 정보다. 남은 예산 안에 못 받으면 목업 이미지로 채우고 일정 자체는 내보낸다.
+    let enhancedDays;
+    try {
+      enhancedDays = await withTimeout(enrichWithPhotos(), Math.max(2_000, remainingMs() - 1_500), "실사진 조회");
+    } catch (photoErr) {
+      console.warn("[TripMate AI] 실사진 조회가 예산을 넘겨 목업 이미지로 대체합니다:", photoErr);
+      enhancedDays = daysContent.map((dayObj: any) => {
         if (Array.isArray(dayObj.activities)) {
-          dayObj.activities = await Promise.all(
-            dayObj.activities.map(async (act: any, idx: number) => {
-              const photoRef = await fetchRealPlacePhotoRef(act.title, destination);
-              act.imageUrl = photoRef
-                ? `/api/place-photo?ref=${encodeURIComponent(photoRef)}`
-                : getMockupImage(act.category, destination, idx);
-              return act;
-            })
-          );
+          dayObj.activities = dayObj.activities.map((act: any, idx: number) => ({
+            ...act,
+            imageUrl: act.imageUrl || getMockupImage(act.category, destination, idx),
+          }));
         }
         return dayObj;
-      })
-    );
+      });
+    }
 
     const finalPlan = {
       title: `${destination} ${durationText} 여행`,

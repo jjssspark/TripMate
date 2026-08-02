@@ -7,6 +7,7 @@ import { useState, useEffect, useRef } from "react";
 import { TravelPlan, ItineraryActivity } from "../types";
 import { EditIcon, ShareIcon, BookmarkIcon, PlusCircleIcon, TrashIcon, CheckIcon, ArrowLeftIcon } from "./Icons";
 import { setPlanShared } from "../lib/supabaseClient";
+import { getPlanCoverImage } from "../lib/planDisplay";
 
 interface FeedbackMessage {
   role: "user" | "ai";
@@ -24,6 +25,15 @@ interface PlanResultViewProps {
 }
 
 const geocodeCache: { [key: string]: [number, number] } = {};
+
+/** 여행 시작일 기준 N일차의 날짜 라벨. "2026-08-14", 1 → "8.15 (토)" */
+function formatDayDate(startDate: string, dayIndex: number): string {
+  if (!startDate) return `${dayIndex + 1}일차`;
+  const date = new Date(startDate);
+  date.setDate(date.getDate() + dayIndex);
+  const weekday = ["일", "월", "화", "수", "목", "금", "토"][date.getDay()];
+  return `${date.getMonth() + 1}.${date.getDate()} (${weekday})`;
+}
 
 export default function PlanResultView({
   plan: initialPlan,
@@ -407,41 +417,54 @@ export default function PlanResultView({
 
   return (
     <div className="w-full max-w-[1000px] mx-auto select-none animate-in fade-in slide-in-from-bottom duration-500 pb-16">
-      {/* Header and top buttons */}
-      <div className="mb-6 flex flex-col md:flex-row md:items-end justify-between gap-6 pb-6 border-b border-outline-variant/30">
-        <div>
-          <span className="text-primary font-bold text-xs uppercase tracking-wider">
-            나만의 {plan.destination} 여행
-          </span>
-          <h2 className="font-headline-lg text-headline-lg mt-2 text-on-surface font-extrabold select-text">
+      {/* 표지 — 일정의 대표 사진 위에 제목과 요약을 얹는다 */}
+      <section className="relative rounded-[26px] overflow-hidden shadow-[0_24px_60px_-30px_rgba(0,60,90,0.55)]">
+        <img
+          src={getPlanCoverImage(plan)}
+          alt=""
+          aria-hidden="true"
+          decoding="async"
+          className="absolute inset-0 w-full h-full object-cover"
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-[#00131c]/95 via-[#00131c]/60 to-[#00131c]/25" />
+
+        <div className="relative px-7 pt-28 pb-7 md:px-10 md:pt-36 md:pb-9">
+          <p className="text-[11px] font-extrabold tracking-[0.24em] uppercase text-primary-fixed-dim mb-2.5">
+            {plan.destination} · {plan.duration}
+          </p>
+          <h2 className="font-headline-lg text-white text-[26px] md:text-[38px] font-extrabold leading-tight tracking-[-0.02em] select-text">
             {plan.title}
           </h2>
-          <p className="text-on-surface-variant text-sm mt-1 max-w-xl">
-            {plan.destination}의 숨은 비경과 취향을 녹인 특별한 여정입니다. 일차별 카드를 자유롭게 누르며 수동으로 장소를 추가하거나 삭제할 수도 있습니다.
-          </p>
 
-          {/* 일정 전체 요약 배지: 여행지 / 날짜 / 인원 / 예산 */}
-          <div className="flex flex-wrap gap-2 mt-3 select-none">
+          <div className="flex flex-wrap gap-2 mt-5 select-none">
             {[
-              { icon: "location_on", label: plan.destination },
-              { icon: "calendar_month", label: `${plan.startDate} ~ ${plan.endDate}` },
+              { icon: "calendar_month", label: `${plan.startDate.replace(/-/g, ".")} – ${plan.endDate.replace(/-/g, ".")}` },
               { icon: "group", label: plan.companion },
               { icon: "payments", label: plan.budget },
+              { icon: "speed", label: plan.intensity || "여유롭게" },
             ].map((item) => (
               <span
                 key={item.icon}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-surface-container rounded-full text-[11px] font-bold text-on-surface-variant"
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-white/12 backdrop-blur-md border border-white/20 rounded-full text-[11px] font-bold text-white/90"
               >
-                <span className="material-symbols-outlined text-sm flex items-center justify-center">
+                <span className="material-symbols-outlined text-sm flex items-center justify-center text-primary-fixed-dim">
                   {item.icon}
                 </span>
                 {item.label}
               </span>
             ))}
           </div>
-        </div>
 
-        {/* Action icons bar */}
+          {plan.styles?.length > 0 && (
+            <p className="mt-3.5 text-white/60 text-xs font-medium">
+              {plan.styles.join(" · ")} 취향을 반영했어요
+            </p>
+          )}
+        </div>
+      </section>
+
+      {/* 액션 바 */}
+      <div className="mt-5 mb-6 pb-6 border-b border-outline-variant/30">
         <div className="flex flex-wrap gap-2 items-center">
           {onBack && (
             <button
@@ -504,21 +527,42 @@ export default function PlanResultView({
         </div>
       </div>
 
-      {/* Days Selection Tab pills */}
-      <div className="flex gap-2 overflow-x-auto pb-4 -mx-6 px-6 md:mx-0 md:px-0 scrollbar-hide flex-nowrap shrink-0">
+      {/* 일차 선택 — 날짜와 그날의 테마까지 보여 준다 */}
+      <div className="flex gap-3 overflow-x-auto pb-4 -mx-6 px-6 md:mx-0 md:px-0 scrollbar-hide flex-nowrap shrink-0">
         {plan.planContent?.map((dayObj, idx) => {
           const isSelected = selectedDayIdx === idx;
           return (
             <button
               key={idx}
               onClick={() => setSelectedDayIdx(idx)}
-              className={`flex-shrink-0 px-5  py-2.5 rounded-full border transition-all active:scale-95 cursor-pointer text-xs ${
+              aria-pressed={isSelected}
+              className={`group flex-shrink-0 w-[164px] text-left px-4 py-3.5 rounded-2xl border transition-[transform,box-shadow,background-color] duration-200 active:scale-[0.98] cursor-pointer ${
                 isSelected
-                  ? "bg-primary border-primary text-white font-bold shadow-md shadow-primary/10"
-                  : "border-outline-variant bg-white text-on-surface-variant hover:border-slate-400 font-semibold"
+                  ? "bg-primary border-primary text-white shadow-lg shadow-primary/20 -translate-y-0.5"
+                  : "border-outline-variant/60 bg-surface-container-lowest text-on-surface-variant hover:border-primary/40 hover:-translate-y-0.5"
               }`}
             >
-              Day {dayObj.day}
+              <span
+                className={`block text-[10px] font-extrabold tracking-[0.18em] uppercase ${
+                  isSelected ? "text-primary-fixed-dim" : "text-primary/70"
+                }`}
+              >
+                Day {dayObj.day}
+              </span>
+              <span
+                className={`block text-[13px] font-bold mt-1 truncate ${
+                  isSelected ? "text-white" : "text-on-surface"
+                }`}
+              >
+                {dayObj.theme || `${dayObj.day}일차 일정`}
+              </span>
+              <span
+                className={`block text-[11px] mt-1 tabular-nums ${
+                  isSelected ? "text-white/65" : "text-outline"
+                }`}
+              >
+                {formatDayDate(plan.startDate, idx)} · {dayObj.activities?.length ?? 0}곳
+              </span>
             </button>
           );
         })}
@@ -612,7 +656,7 @@ export default function PlanResultView({
                   </div>
 
                   {/* Editing Card / Reading Card */}
-                  <div className="flex-1 bg-white p-5 rounded-2xl border border-outline-variant/40 shadow-[0_2px_12px_rgba(0,0,0,0.03)] hover:shadow-md transition-shadow relative">
+                  <div className="flex-1 bg-surface-container-lowest p-5 rounded-2xl border border-outline-variant/40 shadow-[0_4px_16px_-10px_rgba(0,60,90,0.35)] hover:shadow-[0_16px_36px_-20px_rgba(0,60,90,0.45)] hover:-translate-y-0.5 transition-[transform,box-shadow] duration-300 relative overflow-hidden">
                     {isEditing ? (
                       <div className="space-y-3 p-1">
                         {/* Edit Header Time & Title */}
@@ -686,40 +730,40 @@ export default function PlanResultView({
                       </div>
                     ) : (
                       <>
-                        <div className="flex justify-between items-start mb-2">
-                          <h4 className="text-base font-extrabold text-on-surface truncate pr-2">
-                            {act.title}
-                          </h4>
-                          <span className="hidden sm:inline-flex px-2.5 py-1 rounded-full bg-primary/10 text-primary text-[11px] font-extrabold shrink-0">
-                            {act.time}
-                          </span>
-                        </div>
-
-                        <div className="flex gap-4 items-start mb-3 select-text">
+                        <div className="flex gap-4 items-start select-text">
                           {act.imageUrl && (
                             <img
                               alt={act.title}
                               src={act.imageUrl}
                               loading="lazy"
                               decoding="async"
-                              className="w-20 h-20 rounded-xl object-cover shrink-0 select-none bg-surface"
+                              className="w-24 h-24 md:w-28 md:h-28 rounded-xl object-cover shrink-0 select-none bg-surface-variant"
                             />
                           )}
-                          <div className="space-y-1">
-                            <p className="text-xs text-on-surface-variant font-medium leading-relaxed">
-                              {act.description}
-                            </p>
-                            <p className="text-[11px] text-outline flex items-center gap-1 font-semibold select-all">
+                          <div className="min-w-0 flex-1">
+                            <span className="inline-flex items-center gap-1 text-[11px] font-extrabold text-primary tabular-nums tracking-wide">
+                              <span className="material-symbols-outlined text-[13px] flex items-center justify-center">
+                                schedule
+                              </span>
+                              {act.time}
+                            </span>
+                            <h4 className="text-[17px] font-extrabold text-on-surface leading-snug mt-1 mb-1.5 break-keep">
+                              {act.title}
+                            </h4>
+                            <p className="text-[11px] text-outline flex items-center gap-1 font-semibold select-all mb-2">
                               <span className="material-symbols-outlined text-xs flex items-center justify-center">
                                 location_on
                               </span>
                               {act.location}
                             </p>
+                            <p className="text-xs text-on-surface-variant font-medium leading-relaxed">
+                              {act.description}
+                            </p>
                           </div>
                         </div>
 
                         {/* Category and custom action redirects */}
-                        <div className="flex gap-2 items-center flex-wrap pt-1 select-none">
+                        <div className="flex gap-2 items-center flex-wrap mt-4 pt-3.5 border-t border-outline-variant/25 select-none">
                           {act.isMeal && act.mealType && (
                             <span className="px-2.5 py-1 bg-amber-100 text-amber-700 rounded-full text-[10px] font-bold">
                               🍽 {act.mealType} 식사

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { FEATURED_DESTINATIONS, HERO_IMAGE } from "../lib/homeContent";
 import { TravelPlan } from "../types";
@@ -17,6 +17,9 @@ interface PlannerFlowProps {
   onPlanGenerated: (plan: TravelPlan) => void;
   onError: (message: string) => void;
 }
+
+/** 생성 요청을 끊는 상한. 서버 예산(27초)보다 넉넉히 잡아 서버 폴백이 먼저 오게 한다. */
+const GENERATION_TIMEOUT_MS = 30_000;
 
 export default function PlannerFlow({
   initialDestination = "",
@@ -33,6 +36,8 @@ export default function PlannerFlow({
     setStep(next);
   };
   const [loading, setLoading] = useState(false);
+  // 로딩이 얼마나 남았는지 보여 주려면 경과 시간이 필요하다.
+  const [elapsed, setElapsed] = useState(0);
 
   // Form Fields — 사용자가 직접 입력한다. 기본값을 넣지 않는다.
   const [tripTitle, setTripTitle] = useState("");
@@ -150,8 +155,17 @@ export default function PlannerFlow({
     setMustVisitPlaces(mustVisitPlaces.filter((_, i) => i !== index));
   };
 
+  // 로딩 중 경과 시간을 0.1초 단위로 센다. 끝나면 인터벌을 반드시 정리한다.
+  useEffect(() => {
+    if (!loading) return;
+    const started = Date.now();
+    const id = setInterval(() => setElapsed(Date.now() - started), 100);
+    return () => clearInterval(id);
+  }, [loading]);
+
   const handleGenerate = async () => {
     setLoading(true);
+    setElapsed(0);
 
     const requestPayload = {
       destination,
@@ -168,11 +182,17 @@ export default function PlannerFlow({
 
     console.log("★ [TripMate AI] AI 일정 생성 요청 시작:", requestPayload);
 
+    // 서버는 27초 예산 안에서 응답하도록 되어 있다. 여기서 30초에 한 번 더 끊어
+    // 네트워크가 멈춰도 로딩 화면이 무한정 돌지 않게 한다.
+    const controller = new AbortController();
+    const abortTimer = setTimeout(() => controller.abort(), GENERATION_TIMEOUT_MS);
+
     try {
       const response = await fetch("/api/generate-plan", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(requestPayload),
+        signal: controller.signal,
       });
 
       console.log(`★ [TripMate AI] API 응답 수신 상태코드: ${response.status} (${response.statusText})`);
@@ -189,29 +209,66 @@ export default function PlannerFlow({
         plan.title = tripTitle.trim();
       }
 
+      // 서버가 AI 대신 임시 일정을 돌려준 경우. 조용히 넘기면 사용자는 이게 AI 추천인 줄 안다.
+      if (plan.isFallback) {
+        onError("AI 응답이 늦어 임시 일정을 보여드립니다. 다시 시도하면 실제 추천을 받을 수 있어요.");
+      }
+
       onPlanGenerated(plan);
     } catch (err) {
       console.error("★ [TripMate AI] AI Planner Flow Error (일정 생성 중 실패):", err);
-      onError("일정 생성에 실패했습니다. 잠시 후 다시 시도해 주세요.");
+      if (err instanceof DOMException && err.name === "AbortError") {
+        onError("일정 생성이 30초를 넘겨 중단했습니다. 조건을 줄이고 다시 시도해 주세요.");
+      } else {
+        onError("일정 생성에 실패했습니다. 잠시 후 다시 시도해 주세요.");
+      }
     } finally {
+      clearTimeout(abortTimer);
       setLoading(false);
     }
   };
 
   if (loading) {
+    const progress = Math.min(1, elapsed / GENERATION_TIMEOUT_MS);
+    const secondsLeft = Math.max(0, Math.ceil((GENERATION_TIMEOUT_MS - elapsed) / 1000));
+
     return (
-      <div className="fixed inset-0 bg-surface/90 backdrop-blur-md z-50 flex flex-col items-center justify-center p-6 text-center select-none">
-        <div className="w-24 h-24 bg-primary-container/20 rounded-full flex items-center justify-center animate-pulse mb-6">
-          <span className="material-symbols-outlined text-4xl text-primary-container animate-spin">
-            progress_activity
-          </span>
+      <div className="fixed inset-0 z-50 flex flex-col items-center justify-center p-6 text-center select-none overflow-hidden">
+        <img
+          src={destinationPhoto}
+          alt=""
+          aria-hidden="true"
+          className={`absolute inset-0 w-full h-full object-cover ${reduceMotion ? "" : "animate-ken-burns"}`}
+        />
+        <div className="absolute inset-0 bg-[#00131c]/80 backdrop-blur-md" />
+
+        <div className="relative flex flex-col items-center max-w-sm">
+          <div className="w-20 h-20 rounded-full border border-white/25 bg-white/10 flex items-center justify-center mb-6">
+            <span className="material-symbols-outlined text-3xl text-primary-fixed-dim animate-spin">
+              progress_activity
+            </span>
+          </div>
+
+          <h3 className="font-headline-md text-white text-xl mb-2 font-extrabold">
+            {destination.trim() || "여행"} 일정을 그리는 중
+          </h3>
+          <p className="font-body-md text-white/70 leading-relaxed text-sm">
+            취향에 맞는 동선과 식사 시간을 배치하고 있어요.
+          </p>
+
+          {/* 남은 시간을 보여 줘야 기다림이 예측 가능해진다. 30초를 넘기면 자동으로 중단된다. */}
+          <div className="w-64 mt-7">
+            <div className="h-1 w-full bg-white/20 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-primary-fixed-dim rounded-full transition-[width] duration-100 ease-linear"
+                style={{ width: `${progress * 100}%` }}
+              />
+            </div>
+            <p className="mt-2.5 text-[11px] font-semibold tracking-wide text-white/55 tabular-nums">
+              최대 {secondsLeft}초 남음
+            </p>
+          </div>
         </div>
-        <h3 className="font-headline-md text-headline-md text-on-surface mb-2 font-extrabold animate-bounce">
-          AI 플래너 구성 중...
-        </h3>
-        <p className="font-body-md text-on-surface-variant max-w-sm leading-relaxed text-sm">
-          TripMate AI가 사용님의 취향과 일정에 맞는 완벽한 동선과 식당 배치를 마법처럼 설계하고 있습니다. 잠시만 기다려주세요!
-        </p>
       </div>
     );
   }

@@ -45,6 +45,8 @@ export interface TravelPlan {
   createdAt: string;
   updatedAt: string;
   isShared?: boolean;
+  /** AI 생성에 실패해 서버가 임시 목업 일정을 돌려준 경우 true */
+  isFallback?: boolean;
 }
 
 export interface UserSession {
