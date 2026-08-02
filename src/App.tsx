@@ -597,14 +597,7 @@ export default function App() {
 
             {/* 6. PROFILE TABS AND ALARM RULES */}
             {activeTab === "profile" && (
-              <ProfileView
-                session={session}
-                onLogout={handleLogout}
-                onConfigChange={() =>
-                  queryClient.invalidateQueries({ queryKey: ["travel-plans", session?.id] })
-                }
-                localPlans={savedPlans}
-              />
+              <ProfileView session={session} onLogout={handleLogout} />
             )}
           </div>
         ) : (
