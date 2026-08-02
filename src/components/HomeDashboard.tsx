@@ -3,14 +3,24 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { motion, useReducedMotion } from "motion/react";
 import { TravelPlan, UserSession } from "../types";
-import { PlusCircleIcon } from "./Icons";
 import { getPlanCoverImage } from "../lib/planDisplay";
+import HomeSideRails from "./HomeSideRails";
+import {
+  FEATURED_DESTINATIONS,
+  HERO_IMAGE,
+  PHOTO_CREDIT,
+  getGreeting,
+  getTripStats,
+  getUpcomingTrip,
+} from "../lib/homeContent";
 
 interface HomeDashboardProps {
   session: UserSession;
   savedPlans: TravelPlan[];
-  onStartNewTrip: () => void;
+  /** 목적지를 넘기면 일정 만들기 폼의 목적지 칸이 채워진 채로 열린다. */
+  onStartNewTrip: (destination?: string) => void;
   onViewPlan: (plan: TravelPlan) => void;
   onDeletePlan: (id: string) => void;
 }
@@ -21,203 +31,279 @@ export default function HomeDashboard({
   onStartNewTrip,
   onViewPlan,
 }: HomeDashboardProps) {
-  // Take at most 2 plans for quick index view
+  const reduceMotion = useReducedMotion();
+  const upcoming = getUpcomingTrip(savedPlans);
+  const stats = getTripStats(savedPlans);
   const recentPlans = savedPlans.slice(0, 2);
 
-  const recommendedPlaces = [
-    {
-      name: "도쿄, 일본",
-      description: "전통과 첨단이 공존하는 미식의 도시",
-      category: "인기 급상승",
-      imgUrl: "https://lh3.googleusercontent.com/aida-public/AB6AXuAWwaT6yvcSZZqChzslpAIM-mXP8HAwO9RMpNMpU7_5xZGThfsEePx0ScT3Qo0nX7SFSzH7HMHO3geh1p8DFWH9aDwH34TftFrWmxX3ddCs4Cep4uebO_YQCf4JYEEtYXSzj774RBfZMXnBNjImFCGNSEw61WdvtDLNmKNZ9PASDjeS6f-mmWoUdx7Ernoow4EJzBEGMnr9WpRC7zd7hLmk82gAxqi89dziKBSB17y5_hBkGyNm79guUxhg3YQ7Zvvxmm70aFmc0NE",
-    },
-    {
-      name: "오사카, 일본",
-      description: "환상적인 성과 따스한 가을의 정취",
-      category: "가족들과 함께",
-      imgUrl: "https://lh3.googleusercontent.com/aida-public/AB6AXuARu9gRc0w9ZoujuNEUK8ud98haK7tfz0cxaG8GwIkhtrMuUfv7Attw0jeV_RBbiLUHeGYvszUgaID_dD7uHZYZu1KvAG2O-qPhUGMKsb8HqcJl8EyTGdiEn-jYqtnXTv3vycc0MIePFJnhDZXaorQrZXwfnciqzZEhvVoFx9MtUiMUXXh_729a3K5vfjBwQO9F0IwbwQiicd4bYv3JVqj62bbwsSLu375X3Y-OaWrpsy1MhNCZIJq4nq62xDMqzq3RwIJEOjSD2kU",
-    },
-    {
-      name: "시드니, 호주",
-      description: "신선한 연안 바람과 푸른 오션 하이라이트",
-      category: "체험형 휴양",
-      imgUrl: "https://lh3.googleusercontent.com/aida-public/AB6AXuBNj026qW-ZpTYzKavkSWxoW6ztR42Cm0-_DYA0Vrty1MhmDNAhOYT4SgRZIMzAlQs6AQoVP-_nDtUBBhFI7OmwrKePBp2LfkPUYKIucszll7pjwndHWyTHfial5G3ulwYH5oJn0027Ih50_A2V-SJffgPzfZ4prZprIcilvkvMCR0LGwwOQ04M75R3WE4U-wB7DidTpsFLZ4RG0WdtlGIEHs24Q53QHF7wMoEzGmpGkNBd5C_NGN9UeTYR2mJ-1Aqy1BH_hGJfgtg",
-    },
-  ];
+  // reduce-motion 사용자에게는 위치 이동을 없애고 페이드만 남긴다.
+  const rise = (delay: number) => ({
+    initial: { opacity: 0, y: reduceMotion ? 0 : 24 },
+    animate: { opacity: 1, y: 0 },
+    transition: { duration: 0.7, delay, ease: [0.16, 1, 0.3, 1] as const },
+  });
+
+  const reveal = (delay: number) => ({
+    initial: { opacity: 0, y: reduceMotion ? 0 : 28 },
+    whileInView: { opacity: 1, y: 0 },
+    viewport: { once: true, amount: 0.2 },
+    transition: { duration: 0.6, delay, ease: [0.16, 1, 0.3, 1] as const },
+  });
 
   return (
-    <div className="w-full max-w-[1200px] mx-auto select-none animate-in fade-in slide-in-from-top duration-700">
-      {/* Welcome Header */}
-      <section className="mb-8">
-        <p className="text-[10px] font-extrabold text-primary tracking-[0.2em] uppercase mb-1">
-          당신만을 위한 퍼스널 컨시어지
-        </p>
-        <h2 className="text-3xl font-extrabold text-on-surface leading-tight font-headline-lg select-text">
-          반가워요, {session.name}님!
-        </h2>
-        <p className="text-body-md text-on-surface-variant mt-2 leading-relaxed">
-          다음 모험을 떠날 준비가 되셨나요? 인공지능이 당신을 위한 완벽한 여정을 설계해 드립니다.
-        </p>
-      </section>
+    <div className="w-full max-w-[1200px] mx-auto select-none">
+      <HomeSideRails />
 
-      {/* CTA Card Section */}
-      <section className="mb-10">
-        <button
-          onClick={onStartNewTrip}
-          className="group relative w-full h-44 rounded-2xl overflow-hidden shadow-lg shadow-primary/10 active:scale-[0.98] transition-all bg-primary text-white border-none text-center cursor-pointer"
-        >
-          <div className="absolute inset-0 opacity-15 pointer-events-none">
-            <svg height="100%" preserveAspectRatio="none" viewBox="0 0 100 100" width="100%">
-              <circle cx="85" cy="15" fill="white" r="28" />
-              <circle cx="15" cy="85" fill="white" r="38" />
-            </svg>
-          </div>
-          <div className="relative z-10 flex flex-col items-center justify-center h-full p-6">
-            <div className="mb-3 bg-white/20 p-4 rounded-full group-hover:scale-105 transition-transform backdrop-blur-sm">
-              <span className="material-symbols-outlined text-4xl font-bold flex items-center justify-center text-white">
-                rocket_launch
-              </span>
-            </div>
-            <span className="text-xl font-bold tracking-tight">여행 시작하기</span>
-            <span className="text-sm opacity-90 mt-1 font-medium">
-              AI와 함께 특별한 이야기를 만들어보세요
-            </span>
-          </div>
-        </button>
-      </section>
+      {/* ── 히어로 ─────────────────────────────────────────────── */}
+      <section className="relative h-[460px] md:h-[540px] rounded-[28px] overflow-hidden shadow-[0_24px_60px_-24px_rgba(0,40,60,0.45)]">
+        <img
+          src={HERO_IMAGE.url}
+          alt={`${HERO_IMAGE.spot} 항공 전경`}
+          width={1280}
+          height={853}
+          fetchPriority="high"
+          decoding="async"
+          className={`absolute inset-0 w-full h-full object-cover ${reduceMotion ? "" : "animate-ken-burns"}`}
+        />
+        {/* 텍스트 가독성용 이중 그라데이션 — 왼쪽 아래로 갈수록 어둡게 */}
+        <div className="absolute inset-0 bg-gradient-to-tr from-[#00131c]/90 via-[#00131c]/45 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-[#00131c]/70 via-transparent to-transparent" />
 
-      {/* Gwak Jin-ah's Recent Trips (최근 저장된 여행) */}
-      <section className="mb-10">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-xl font-bold text-on-surface font-headline-md h-8 flex items-center">
-            나의 최근 여행
-          </h3>
-          {savedPlans.length > 0 && (
+        <div className="relative h-full flex flex-col justify-end p-7 md:p-12">
+          <motion.p
+            {...rise(0.1)}
+            className="text-[11px] font-extrabold tracking-[0.28em] uppercase text-primary-fixed-dim mb-3"
+          >
+            {getGreeting()}, {session.name}님
+          </motion.p>
+
+          <motion.h2
+            {...rise(0.2)}
+            className="font-headline-lg text-white text-[34px] md:text-[52px] font-extrabold leading-[1.12] tracking-[-0.02em] max-w-[16ch] select-text"
+          >
+            다음 여행은
+            <br />
+            어디로 떠날까요?
+          </motion.h2>
+
+          <motion.p
+            {...rise(0.3)}
+            className="text-white/75 text-body-md mt-4 max-w-[42ch] leading-relaxed"
+          >
+            가고 싶은 곳과 며칠인지만 알려주세요. 나머지 일정은 AI가 짭니다.
+          </motion.p>
+
+          <motion.div {...rise(0.4)} className="mt-8 flex flex-wrap items-center gap-3">
             <button
-              onClick={() => {}}
-              className="text-primary font-bold text-sm bg-transparent border-0 hover:underline cursor-none pointer-events-none select-none"
+              onClick={() => onStartNewTrip()}
+              className="group inline-flex items-center gap-2.5 bg-white text-primary font-bold text-[15px] pl-6 pr-5 py-4 rounded-full border-none cursor-pointer shadow-lg shadow-black/20 transition-transform duration-200 hover:-translate-y-0.5 active:translate-y-0 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white"
             >
-              총 {savedPlans.length}개 보관됨
+              AI로 일정 만들기
+              <span className="material-symbols-outlined text-lg transition-transform duration-300 group-hover:translate-x-1">
+                arrow_forward
+              </span>
             </button>
-          )}
+
+            {upcoming && (
+              <button
+                onClick={() => onViewPlan(upcoming.plan)}
+                className="inline-flex items-center gap-2.5 bg-white/12 backdrop-blur-md text-white font-semibold text-[15px] px-5 py-4 rounded-full border border-white/25 cursor-pointer transition-colors duration-200 hover:bg-white/20 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white"
+              >
+                <span className="material-symbols-outlined text-lg text-primary-fixed-dim">
+                  flight_takeoff
+                </span>
+                {upcoming.plan.destination}
+                <span className="font-extrabold tracking-tight tabular-nums">
+                  {upcoming.inTrip
+                    ? "여행 중"
+                    : upcoming.daysLeft === 0
+                      ? "D-DAY"
+                      : `D-${upcoming.daysLeft}`}
+                </span>
+              </button>
+            )}
+          </motion.div>
         </div>
+
+        <p className="absolute bottom-4 right-5 text-[10px] text-white/45 tracking-wide">
+          {HERO_IMAGE.spot}
+        </p>
+      </section>
+
+      {/* ── 여행 기록 스트립 (보딩패스 모티프) ──────────────────── */}
+      {stats.planCount > 0 && (
+        <motion.section
+          {...rise(0.5)}
+          className="relative -mt-8 mx-4 md:mx-10 z-10 bg-surface-container-lowest rounded-2xl border border-outline-variant/30 shadow-[0_12px_32px_-16px_rgba(0,40,60,0.35)] px-6 py-5 flex items-stretch divide-x divide-dashed divide-outline-variant/50"
+        >
+          {[
+            { label: "저장한 일정", value: stats.planCount, unit: "개" },
+            { label: "떠날 도시", value: stats.cityCount, unit: "곳" },
+            { label: "여행 일수", value: stats.nightCount, unit: "박" },
+          ].map((item) => (
+            <div key={item.label} className="flex-1 px-3 first:pl-0 last:pr-0 text-center">
+              <p className="text-[10px] font-bold tracking-[0.16em] uppercase text-outline mb-1.5">
+                {item.label}
+              </p>
+              <p className="font-headline-lg text-2xl font-extrabold text-on-surface tabular-nums leading-none">
+                {item.value}
+                <span className="text-sm font-bold text-on-surface-variant ml-0.5">{item.unit}</span>
+              </p>
+            </div>
+          ))}
+        </motion.section>
+      )}
+
+      {/* ── 내 최근 여행 ───────────────────────────────────────── */}
+      <section className="mt-14">
+        <motion.div {...reveal(0)} className="flex items-end justify-between mb-5">
+          <div>
+            <h3 className="font-headline-md text-xl font-extrabold text-on-surface">
+              나의 최근 여행
+            </h3>
+            <p className="text-label-md text-on-surface-variant mt-1">
+              {savedPlans.length > 0
+                ? `보관 중인 일정 ${savedPlans.length}개`
+                : "아직 저장한 일정이 없어요"}
+            </p>
+          </div>
+        </motion.div>
 
         {recentPlans.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            {recentPlans.map((plan) => {
-              // 코스에서 가장 네임드(랜드마크격)인 필수 방문 장소 사진을 대표 썸네일로 사용
-              const displayImage = getPlanCoverImage(plan);
-
-              const primaryStyle = plan.styles?.[0] || "자유 여행";
-
-              return (
-                <div
-                  key={plan.id}
-                  onClick={() => onViewPlan(plan)}
-                  className="bg-white rounded-2xl overflow-hidden border border-outline-variant/30 shadow-[0_4px_12px_rgba(0,0,0,0.03)] group cursor-pointer transition-all hover:shadow-xl hover:-translate-y-0.5 flex flex-col h-full"
-                >
-                  <div className="h-44 relative overflow-hidden bg-surface-variant">
-                    <img
-                      alt={plan.destination}
-                      src={displayImage}
-                      loading="lazy"
-                      decoding="async"
-                      className="w-full h-full object-cover group-hover:scale-102 transition-transform duration-500"
-                    />
-                    <div className="absolute top-4 left-4">
-                      <span className="bg-white/95 backdrop-blur-md text-primary px-3 py-1.5 rounded-full text-xs font-bold shadow-sm flex items-center gap-1">
-                        <span className="material-symbols-outlined text-sm font-bold flex items-center justify-center">
-                          explore
-                        </span>
-                        {primaryStyle}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="p-5 flex-1 flex flex-col justify-between">
-                    <div>
-                      <h4 className="text-lg font-bold mb-1 truncate text-on-surface group-hover:text-primary transition-colors">
-                        {plan.title}
-                      </h4>
-                      <p className="text-on-surface-variant text-xs mb-4 flex items-center gap-1.5 font-medium">
-                        <span className="material-symbols-outlined text-sm flex items-center justify-center text-outline">
-                          calendar_today
-                        </span>
-                        {plan.startDate.replace(/-/g, ".")} - {plan.endDate.replace(/-/g, ".")} ({plan.duration})
-                      </p>
-                    </div>
-
-                    <div className="flex items-center justify-between pt-2 border-t border-outline-variant/20">
-                      <div className="flex -space-x-1.5">
-                        <div className="w-8 h-8 rounded-full border-2 border-white bg-primary-container flex items-center justify-center text-[10px] font-bold text-primary">
-                          JD
-                        </div>
-                        <div className="w-8 h-8 rounded-full border-2 border-white bg-primary flex items-center justify-center text-[10px] font-bold text-white shadow-sm">
-                          +{plan.companion === "혼자" ? 0 : 2}
-                        </div>
-                      </div>
-                      <div className="w-8 h-8 rounded-full bg-primary-container flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-white transition-all select-none">
-                        <span className="material-symbols-outlined text-sm font-bold flex items-center justify-center">
-                          arrow_forward
-                        </span>
-                      </div>
-                    </div>
+            {recentPlans.map((plan, idx) => (
+              <motion.button
+                key={plan.id}
+                {...reveal(idx * 0.08)}
+                onClick={() => onViewPlan(plan)}
+                className="group text-left bg-surface-container-lowest rounded-2xl overflow-hidden border border-outline-variant/30 shadow-[0_4px_16px_-8px_rgba(0,40,60,0.25)] cursor-pointer p-0 transition-[transform,box-shadow] duration-300 hover:-translate-y-1 hover:shadow-[0_20px_40px_-20px_rgba(0,40,60,0.4)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+              >
+                <div className="h-48 relative overflow-hidden bg-surface-variant">
+                  <img
+                    alt={plan.destination}
+                    src={getPlanCoverImage(plan)}
+                    loading="lazy"
+                    decoding="async"
+                    className="w-full h-full object-cover transition-transform duration-[900ms] ease-out group-hover:scale-105"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/55 to-transparent" />
+                  <span className="absolute top-4 left-4 bg-white/95 backdrop-blur-md text-primary px-3 py-1.5 rounded-full text-[11px] font-bold shadow-sm">
+                    {plan.styles?.[0] || "자유 여행"}
+                  </span>
+                  <div className="absolute bottom-4 left-4 right-4">
+                    <p className="text-white/70 text-[11px] font-semibold tracking-wide mb-0.5">
+                      {plan.destination}
+                    </p>
+                    <h4 className="text-white font-bold text-lg leading-tight truncate">
+                      {plan.title}
+                    </h4>
                   </div>
                 </div>
-              );
-            })}
+
+                <div className="px-5 py-4 flex items-center justify-between">
+                  <p className="text-on-surface-variant text-xs font-medium flex items-center gap-1.5 tabular-nums">
+                    <span className="material-symbols-outlined text-sm text-outline">
+                      calendar_today
+                    </span>
+                    {plan.startDate.replace(/-/g, ".")} – {plan.endDate.replace(/-/g, ".")}
+                    <span className="text-outline">·</span>
+                    {plan.duration}
+                  </p>
+                  <span className="w-8 h-8 shrink-0 rounded-full bg-primary-container/25 flex items-center justify-center text-primary transition-colors duration-200 group-hover:bg-primary group-hover:text-white">
+                    <span className="material-symbols-outlined text-sm font-bold">arrow_forward</span>
+                  </span>
+                </div>
+              </motion.button>
+            ))}
           </div>
         ) : (
-          <div className="bg-white rounded-2xl border-2 border-dashed border-outline-variant/40 p-8 text-center text-on-surface-variant flex flex-col items-center justify-center gap-3">
-            <span className="material-symbols-outlined text-4xl text-outline-variant flex items-center justify-center">
+          <motion.div
+            {...reveal(0)}
+            className="rounded-2xl border-2 border-dashed border-outline-variant/50 bg-surface-container-lowest/60 p-10 text-center flex flex-col items-center gap-3"
+          >
+            <span className="material-symbols-outlined text-4xl text-outline-variant">
               travel_explore
             </span>
-            <div className="space-y-1">
-              <p className="font-semibold text-sm">저장된 여행 계획이 없습니다.</p>
-              <p className="text-xs text-outline">위의 '여행 시작하기'를 눌러 나만의 멋진 AI 일정을 완성해 보세요!</p>
-            </div>
-          </div>
+            <p className="font-semibold text-sm text-on-surface-variant">
+              첫 여행을 만들면 여기에 쌓입니다.
+            </p>
+            <button
+              onClick={() => onStartNewTrip()}
+              className="mt-1 text-primary font-bold text-sm bg-transparent border-none cursor-pointer hover:underline"
+            >
+              지금 시작하기 →
+            </button>
+          </motion.div>
         )}
       </section>
 
-      {/* AI Suggestion Destinations */}
-      <section className="pb-8">
-        <h3 className="text-xl font-bold text-on-surface font-headline-md mb-4 flex items-center gap-2">
-          AI가 추천하는 여행지
-        </h3>
-        <div className="flex gap-4 overflow-x-auto pb-4 -mx-6 px-6 md:mx-0 md:px-0 scrollbar-hide flex-nowrap shrink-0 snap-x">
-          {recommendedPlaces.map((place, idx) => (
-            <div
-              key={idx}
-              onClick={onStartNewTrip}
-              className="flex-shrink-0 w-36 h-48 rounded-xl relative overflow-hidden cursor-pointer group shadow-md snap-start"
+      {/* ── 국내 여행지 무드보드 ───────────────────────────────── */}
+      <section className="mt-16 pb-10">
+        <motion.div {...reveal(0)} className="mb-6">
+          <p className="text-[11px] font-extrabold tracking-[0.24em] uppercase text-primary mb-1.5">
+            Domestic Picks
+          </p>
+          <h3 className="font-headline-md text-2xl font-extrabold text-on-surface tracking-[-0.01em]">
+            지금 떠나기 좋은 곳
+          </h3>
+          <p className="text-label-md text-on-surface-variant mt-1.5">
+            마음에 드는 사진을 누르면 그 목적지로 일정 만들기가 시작됩니다.
+          </p>
+        </motion.div>
+
+        <div className="grid grid-cols-2 lg:grid-cols-4 auto-rows-[168px] lg:auto-rows-[152px] gap-3 md:gap-4">
+          {FEATURED_DESTINATIONS.map((place, idx) => (
+            <motion.button
+              key={place.name}
+              {...reveal(Math.min(idx, 5) * 0.06)}
+              onClick={() => onStartNewTrip(place.name)}
+              aria-label={`${place.name}로 일정 만들기`}
+              className={`${place.spanClass} group relative rounded-2xl overflow-hidden p-0 border-none cursor-pointer bg-surface-variant text-left shadow-[0_6px_20px_-12px_rgba(0,40,60,0.5)] transition-[transform,box-shadow] duration-300 hover:-translate-y-1 hover:shadow-[0_20px_40px_-20px_rgba(0,40,60,0.55)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary`}
             >
               <img
-                alt={place.name}
-                className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                src={place.imgUrl}
+                src={place.imageUrl}
+                alt={`${place.name} ${place.spot}`}
                 loading="lazy"
                 decoding="async"
+                className="absolute inset-0 w-full h-full object-cover transition-transform duration-[900ms] ease-out group-hover:scale-[1.07]"
               />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent"></div>
-              <div className="absolute bottom-4 left-3 right-3 text-white flex flex-col justify-end">
-                <span className="text-[9px] text-primary font-bold uppercase tracking-wider mb-0.5">
-                  {place.category}
+              {/* 사진은 살리고 이름이 놓이는 아래쪽만 눌러 대비를 만든다 */}
+              <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 via-45% to-transparent transition-opacity duration-300 group-hover:opacity-95" />
+
+              <div className="absolute inset-x-0 bottom-0 p-4">
+                <span className="inline-block text-[9px] font-extrabold tracking-[0.2em] uppercase text-primary-fixed-dim mb-1">
+                  {place.region}
                 </span>
-                <span className="text-sm font-extrabold tracking-tight truncate">
+                <p className="text-white font-extrabold text-lg leading-none tracking-[-0.01em]">
                   {place.name}
+                </p>
+                {/* 태그라인은 평소 접혀 있다가 hover 시 펼쳐진다 (grid-rows 트랜지션) */}
+                <span className="grid grid-rows-[0fr] group-hover:grid-rows-[1fr] transition-[grid-template-rows] duration-300 ease-out">
+                  <span className="overflow-hidden">
+                    <span className="block text-white/85 text-xs leading-snug pt-1.5">
+                      {place.tagline}
+                    </span>
+                  </span>
                 </span>
               </div>
-            </div>
+            </motion.button>
           ))}
 
-          <div
-            onClick={onStartNewTrip}
-            className="flex-shrink-0 w-36 h-48 rounded-xl bg-primary-container/10 border border-dashed border-primary/30 flex flex-col items-center justify-center p-4 text-center cursor-pointer hover:bg-primary-container/20 transition-colors select-none"
+          <motion.button
+            {...reveal(0.3)}
+            onClick={() => onStartNewTrip()}
+            className="col-span-1 lg:col-span-2 group relative rounded-2xl border-2 border-dashed border-primary/35 bg-primary-container/10 flex flex-col items-center justify-center gap-2 cursor-pointer p-4 transition-colors duration-200 hover:bg-primary-container/20 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
           >
-            <PlusCircleIcon className="text-primary w-8 h-8 mb-2" />
-            <span className="text-primary text-[11px] font-extrabold">더 많은 여행지</span>
-          </div>
+            <span className="material-symbols-outlined text-3xl text-primary transition-transform duration-300 group-hover:rotate-90">
+              add
+            </span>
+            <span className="text-primary text-xs font-extrabold">직접 목적지 입력하기</span>
+          </motion.button>
         </div>
+
+        <p className="mt-5 text-[10px] leading-relaxed text-outline">
+          사진 © {PHOTO_CREDIT} / Wikimedia Commons (CC BY·CC BY-SA·CC0)
+        </p>
       </section>
     </div>
   );

@@ -85,6 +85,53 @@
 
   --text-label-sm: 12px;
   --text-label-sm--line-height: 16px;
+
+  /* 홈 히어로 배경의 느린 줌·패닝. 레이아웃을 다시 계산하지 않도록 transform만 움직인다. */
+  --animate-ken-burns: ken-burns 28s ease-in-out infinite alternate;
+
+  @keyframes ken-burns {
+    from {
+      transform: scale(1.06) translate3d(0, 0, 0);
+    }
+    to {
+      transform: scale(1.18) translate3d(-2%, -1.5%, 0);
+    }
+  }
+}
+
+/* 모션 민감 사용자: 자동 재생 애니메이션과 전환을 사실상 정지시킨다. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* 앱 배경. 콘텐츠는 1200px로 묶이므로 넓은 화면에서 남는 양옆이 빈 회색으로 보이지 않도록
+   바다·노을·모래 톤의 옅은 광원을 깔고, 그 위에 미세한 그레인을 얹어 인쇄물 같은 질감을 준다.
+   App.tsx의 고정 레이어에 붙어 스크롤과 무관하게 제자리에 머문다. */
+html {
+  background-color: #f2f6f9;
+}
+
+.app-atmosphere {
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23g)' opacity='0.055'/%3E%3C/svg%3E"),
+    radial-gradient(60rem 38rem at 6% -10%, oklch(72% 0.13 232 / 0.28), transparent 62%),
+    radial-gradient(44rem 30rem at 101% 4%, oklch(80% 0.11 42 / 0.20), transparent 60%),
+    radial-gradient(52rem 34rem at 88% 92%, oklch(86% 0.10 92 / 0.24), transparent 62%),
+    radial-gradient(42rem 28rem at -6% 82%, oklch(76% 0.10 200 / 0.20), transparent 60%);
+  background-repeat: repeat, no-repeat, no-repeat, no-repeat, no-repeat;
+  background-size:
+    180px 180px,
+    auto,
+    auto,
+    auto,
+    auto;
 }
 
 /* Material symbols adjustments */

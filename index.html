@@ -19,7 +19,9 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 </head>
 
-<body class="bg-[#f8f9fa] text-gray-900 font-sans antialiased text-base">
+<!-- 배경색은 index.css의 html 규칙이 담당한다. body에 불투명 배경을 주면
+     App.tsx의 배경 광원 레이어(-z-10)가 가려진다. -->
+<body class="text-gray-900 font-sans antialiased text-base">
   <div id="root"></div>
   <script type="module" src="/src/main.tsx"></script>
 </body>

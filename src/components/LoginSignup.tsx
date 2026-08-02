@@ -5,7 +5,8 @@
 
 import React, { useState } from "react";
 import { UserSession } from "../types";
-import { ExploreIcon, MailIcon, LockIcon, PersonIcon, ArrowRightIcon } from "./Icons";
+import { MailIcon, LockIcon, PersonIcon, ArrowRightIcon } from "./Icons";
+import BrandLogo from "./BrandLogo";
 import { getSupabaseClient, buildUserSession } from "../lib/supabaseClient";
 
 interface LoginSignupProps {
@@ -178,12 +179,9 @@ export default function LoginSignup({ onLoginSuccess }: LoginSignupProps) {
     <div className="w-full max-w-[440px] mx-auto py-12 px-6 flex flex-col items-center">
       {/* Logo Header */}
       <header className="mb-8 text-center flex flex-col items-center gap-2">
-        <div className="flex items-center justify-center gap-2">
-          <ExploreIcon className="text-primary w-10 h-10" />
-          <h1 className="font-headline-lg-mobile text-headline-lg-mobile text-black tracking-tight font-extrabold select-none">
-            TripMate AI
-          </h1>
-        </div>
+        <h1 className="flex items-center justify-center select-none">
+          <BrandLogo size="lg" />
+        </h1>
         <p className="font-body-md text-on-surface-variant text-sm">
           {isLogin ? "여행의 설렘을 AI와 함께" : "스마트한 여행의 시작, 트립메이트 AI와 함께하세요"}
         </p>

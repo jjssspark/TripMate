@@ -9,17 +9,23 @@ import { ArrowLeftIcon, ArrowRightIcon, SparklesIcon, EditIcon, LocationIcon, Ca
 import { searchDestinations } from "../lib/destinations";
 
 interface PlannerFlowProps {
+  /** 홈의 추천 여행지에서 넘어온 경우 목적지를 미리 채운다. */
+  initialDestination?: string;
   onPlanGenerated: (plan: TravelPlan) => void;
   onError: (message: string) => void;
 }
 
-export default function PlannerFlow({ onPlanGenerated, onError }: PlannerFlowProps) {
+export default function PlannerFlow({
+  initialDestination = "",
+  onPlanGenerated,
+  onError,
+}: PlannerFlowProps) {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
 
   // Form Fields — 사용자가 직접 입력한다. 기본값을 넣지 않는다.
   const [tripTitle, setTripTitle] = useState("");
-  const [destination, setDestination] = useState("");
+  const [destination, setDestination] = useState(initialDestination);
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   // 단일 선택 항목은 하나를 기본으로 둔다 (미선택 상태를 허용하면 별도 검증이 필요해진다)

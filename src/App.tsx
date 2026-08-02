@@ -46,6 +46,8 @@ export default function App() {
   const pushScreen = (tab: string) => setNavStack((prev) => [...prev, tab]);
   const goBack = () => setNavStack((prev) => (prev.length > 1 ? prev.slice(0, -1) : prev));
   const [activePlan, setActivePlan] = useState<TravelPlan | null>(null);
+  // 홈의 추천 여행지 카드에서 넘어올 때 목적지를 미리 채워 주기 위한 값
+  const [plannerDestination, setPlannerDestination] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
@@ -419,7 +421,9 @@ export default function App() {
   ];
 
   return (
-    <div className="min-h-screen bg-[#f8f9fa] flex flex-col">
+    <div className="min-h-screen flex flex-col">
+      {/* 배경 광원 레이어. 콘텐츠 뒤에 고정돼 넓은 화면의 좌우 여백을 채운다. */}
+      <div className="app-atmosphere fixed inset-0 -z-10 pointer-events-none" aria-hidden="true" />
       {/* Visual Navigation Header bar */}
       <Navbar
         session={session}
@@ -439,7 +443,10 @@ export default function App() {
               <HomeDashboard
                 session={session}
                 savedPlans={savedPlans}
-                onStartNewTrip={() => pushScreen("planner")}
+                onStartNewTrip={(destination) => {
+                  setPlannerDestination(destination ?? "");
+                  pushScreen("planner");
+                }}
                 onViewPlan={handleViewPlanDetails}
                 onDeletePlan={handleDeletePlan}
               />
@@ -448,6 +455,7 @@ export default function App() {
             {/* 2. PLANNER FLOW TAB */}
             {activeTab === "planner" && (
               <PlannerFlow
+                initialDestination={plannerDestination}
                 onPlanGenerated={handlePlanGenerated}
                 onError={(message) => showToast(message, "error")}
               />

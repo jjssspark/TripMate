@@ -4,7 +4,8 @@
  */
 
 import { UserSession } from "../types";
-import { ExploreIcon, PersonIcon, BellIcon, ArrowLeftIcon } from "./Icons";
+import { PersonIcon, BellIcon, ArrowLeftIcon } from "./Icons";
+import BrandLogo from "./BrandLogo";
 
 interface NavbarProps {
   session: UserSession | null;
@@ -17,7 +18,7 @@ interface NavbarProps {
 
 export default function Navbar({ session, activeTab, setActiveTab, canGoBack, onBack }: NavbarProps) {
   return (
-    <header className="bg-white/90 backdrop-blur-md flex justify-between items-center px-6 w-full h-16 fixed top-0 z-40 border-b border-surface-variant select-none">
+    <header className="bg-white/75 backdrop-blur-xl flex justify-between items-center px-6 w-full h-16 fixed top-0 z-40 border-b border-white/60 shadow-[0_1px_20px_-12px_rgba(0,60,90,0.5)] select-none">
       <div className="flex items-center gap-3">
         {/* 앱 전용 뒤로가기 버튼: planner/plan_result처럼 하위 플로우에 있을 때만 노출 */}
         {canGoBack && onBack && (
@@ -29,15 +30,13 @@ export default function Navbar({ session, activeTab, setActiveTab, canGoBack, on
             <ArrowLeftIcon className="w-5 h-5" />
           </button>
         )}
-        <div
+        <button
           onClick={() => setActiveTab("home")}
-          className="flex items-center gap-2 cursor-pointer select-none active:scale-95 transition-all"
+          aria-label="TripMate AI 홈"
+          className="group flex items-center bg-transparent border-none p-0 cursor-pointer select-none active:scale-95 transition-transform"
         >
-          <ExploreIcon className="text-primary w-8 h-8 fill-primary/10" />
-          <h1 className="text-xl font-extrabold text-black tracking-tight font-headline-lg">
-            TripMate AI
-          </h1>
-        </div>
+          <BrandLogo size="md" className="[&>span:first-child]:transition-transform [&>span:first-child]:duration-500 group-hover:[&>span:first-child]:-rotate-12" />
+        </button>
       </div>
 
       {session ? (

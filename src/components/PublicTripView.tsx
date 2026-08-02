@@ -7,7 +7,7 @@ import { useEffect, useState } from "react";
 import { TravelPlan } from "../types";
 import { fetchPublicPlan } from "../lib/supabaseClient";
 import PlanResultView from "./PlanResultView";
-import { ExploreIcon } from "./Icons";
+import BrandLogo from "./BrandLogo";
 
 interface PublicTripViewProps {
   planId: string;
@@ -38,9 +38,8 @@ export default function PublicTripView({ planId }: PublicTripViewProps) {
   return (
     <div className="min-h-screen bg-[#f8f9fa] flex flex-col">
       <header className="bg-white/90 backdrop-blur-md flex items-center px-6 w-full h-16 border-b border-surface-variant select-none">
-        <a href="/" className="flex items-center gap-2 cursor-pointer select-none">
-          <ExploreIcon className="text-primary w-8 h-8 fill-primary/10" />
-          <h1 className="text-xl font-extrabold text-black tracking-tight font-headline-lg">TripMate AI</h1>
+        <a href="/" className="flex items-center cursor-pointer select-none">
+          <BrandLogo size="md" />
         </a>
       </header>
 
