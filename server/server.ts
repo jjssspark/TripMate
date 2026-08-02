@@ -294,8 +294,11 @@ app.post("/api/generate-plan", async (req, res) => {
     return res.status(400).json({ error: "Destination is required" });
   }
 
-  // 여행 강도에 따라 (식사 제외) 하루 스팟 개수를 결정: 여유롭게=3곳, 빡빡하게=5곳
-  const spotsPerDay = intensity === "빡빡하게" ? 5 : 3;
+  // 여행 강도에 따라 (식사 제외) 하루 스팟 개수 "범위"를 정한다: 여유롭게=1~3곳, 빡빡하게=4~8곳.
+  // 고정 개수를 강제하면 이동이 먼 날에도 억지로 숫자를 채우게 되므로 범위로 넘긴다.
+  const spotRange = intensity === "빡빡하게" ? { min: 4, max: 8 } : { min: 1, max: 3 };
+  // 폴백(모의) 일정은 범위를 판단할 주체가 없으므로 중앙값을 쓴다.
+  const spotsPerDay = Math.round((spotRange.min + spotRange.max) / 2);
 
   // Calculate duration
   let durationText = "2박 3일";
@@ -422,8 +425,8 @@ app.post("/api/generate-plan", async (req, res) => {
 
 [동선 설계 안내 및 제약사항]
 1. 하루 일정에는 항상 아침식사, 점심식사, 저녁식사 총 3개의 식사 활동을 포함하세요. 각 식사 활동은 "isMeal": true 로 표시하고 "mealType"에 "아침"/"점심"/"저녁" 중 하나를 지정하세요. category는 "맛집" 또는 "카페"로 설정하세요.
-2. 식사를 제외한 관광/체험/쇼핑 등 일반 활동은 하루에 정확히 ${spotsPerDay}개를 배치하세요 (사용자가 선택한 여행 강도 "${intensity || "여유롭게"}" 기준: 여유롭게=3개, 빡빡하게=5개). 이 일반 활동들은 "isMeal": false 로 표시하세요.
-3. 결과적으로 하루 activities 배열의 총 개수는 식사 3개 + 일반 활동 ${spotsPerDay}개 = 정확히 ${spotsPerDay + 3}개여야 합니다.
+2. 식사를 제외한 관광/체험/쇼핑 등 일반 활동은 하루에 ${spotRange.min}개 이상 ${spotRange.max}개 이하로 배치하세요 (사용자가 선택한 여행 강도 "${intensity || "여유롭게"}" 기준: 여유롭게=1~3개, 빡빡하게=4~8개). 이동 거리가 멀거나 한 곳에 오래 머무는 날은 범위의 아래쪽을, 장소가 가깝게 모여 있는 날은 위쪽을 택해 날마다 다르게 구성하세요. 이 일반 활동들은 "isMeal": false 로 표시하세요.
+3. 결과적으로 하루 activities 배열의 총 개수는 식사 3개 + 일반 활동 ${spotRange.min}~${spotRange.max}개 = ${spotRange.min + 3}~${spotRange.max + 3}개여야 합니다.
 4. 맛집이나 카페 스타일을 선호하는 경우 식사 시간대 장소 선정에 그 취향을 반영하세요.
 5. 요청한 필수 방문 장소([Must-Visit])가 있다면, 일치하는 활동에서  "mustVisit": true 로 설정하고 실제 여행 일정에 반드시 포함하세요.
 6. 설명은 여행 가이드북처럼 구체적이고 현지 감성을 살려 팁과 정겨운 톤("~를 강력 추천합니다", "~를 만끽해보세요" 처럼 존댓말 한글)으로 작성해주세요.

@@ -4,9 +4,12 @@
  */
 
 import React, { useState } from "react";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import { FEATURED_DESTINATIONS, HERO_IMAGE } from "../lib/homeContent";
 import { TravelPlan } from "../types";
 import { ArrowLeftIcon, ArrowRightIcon, SparklesIcon, EditIcon, LocationIcon, CalendarIcon } from "./Icons";
 import { searchDestinations } from "../lib/destinations";
+import { getRecommendedSpots } from "../lib/recommendedSpots";
 
 interface PlannerFlowProps {
   /** 홈의 추천 여행지에서 넘어온 경우 목적지를 미리 채운다. */
@@ -21,6 +24,14 @@ export default function PlannerFlow({
   onError,
 }: PlannerFlowProps) {
   const [step, setStep] = useState(1);
+  // 단계 전환 방향(1=다음, -1=이전). 슬라이드가 진행 방향과 반대로 나가면 어색하다.
+  const [direction, setDirection] = useState(1);
+  const reduceMotion = useReducedMotion();
+
+  const goToStep = (next: number) => {
+    setDirection(next > step ? 1 : -1);
+    setStep(next);
+  };
   const [loading, setLoading] = useState(false);
 
   // Form Fields — 사용자가 직접 입력한다. 기본값을 넣지 않는다.
@@ -47,6 +58,14 @@ export default function PlannerFlow({
 
   // 초성 검색 지원. 관련도 순 정렬은 searchDestinations가 처리한다.
   const filteredDestinations = searchDestinations(destination);
+
+  // 필수 방문 후보는 선택한 목적지에 따라 달라진다.
+  const recommendedSpots = getRecommendedSpots(destination);
+
+  // 폼 상단 사진도 목적지를 따라간다. 사진을 가진 8곳이 아니면 기본 이미지로 둔다.
+  const destinationPhoto =
+    FEATURED_DESTINATIONS.find((d) => destination.trim().startsWith(d.name))?.imageUrl ??
+    HERO_IMAGE.url;
 
   const handleSelectDestination = (name: string) => {
     setDestination(name);
@@ -79,22 +98,38 @@ export default function PlannerFlow({
     { label: "가족", icon: "family_restroom" }
   ];
 
+  // 라벨은 그대로 AI 프롬프트에 실려 나가므로 서로 겹치지 않는 축으로만 늘린다.
+  // (예: "바다"를 "자연"과 나눈 이유는 국내 여행에서 동선이 완전히 달라지기 때문)
+  // 일정 속도는 아래 '여행 강도'가 전담한다. 여기에 "여유로운 일정" 같은 항목을 두면
+  // 같은 질문을 한 화면에서 두 번 하게 된다.
   const travelStyles = [
     { label: "맛집", icon: "restaurant" },
     { label: "카페", icon: "local_cafe" },
     { label: "쇼핑", icon: "shopping_bag" },
     { label: "자연", icon: "forest" },
+    { label: "바다/해변", icon: "beach_access" },
     { label: "역사/문화", icon: "history_edu" },
-    { label: "사진 스팟", icon: "photo_camera" },
-    { label: "여유로운 일정", icon: "spa" }
+    { label: "전시/예술", icon: "palette" },
+    { label: "액티비티", icon: "hiking" },
+    { label: "야경/밤거리", icon: "nightlife" },
+    { label: "온천/힐링", icon: "hot_tub" },
+    { label: "사진 스팟", icon: "photo_camera" }
   ];
+
+  // 전부 고르면 취향이 아니라 백화점이 된다. AI가 우선순위를 잡을 수 있도록 상한을 둔다.
+  const MAX_STYLES = 5;
+  const isStyleLimitReached = styles.length >= MAX_STYLES;
 
   const toggleStyle = (label: string) => {
     if (styles.includes(label)) {
       setStyles(styles.filter((s) => s !== label));
-    } else {
-      setStyles([...styles, label]);
+      return;
     }
+    if (isStyleLimitReached) {
+      onError(`여행 스타일은 최대 ${MAX_STYLES}개까지 고를 수 있어요.`);
+      return;
+    }
+    setStyles([...styles, label]);
   };
 
   const handleAddTag = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -182,47 +217,80 @@ export default function PlannerFlow({
   }
 
   return (
-    <div className="w-full max-w-[640px] mx-auto select-none py-4">
-      {/* Progress Header */}
-      <header className="mb-8">
-        <div className="flex justify-between items-center mb-3">
-          <span className="font-label-md text-primary font-bold text-xs uppercase tracking-wider">
-            {step} / 3 단계
-          </span>
-          <span className="font-label-sm text-on-surface-variant text-xs font-semibold text-outline">
-            {step === 1 && "기본 정보 & 분위기"}
-            {step === 2 && "나의 여행 취향"}
-            {step === 3 && "최종 세부사항"}
-          </span>
-        </div>
-        <div className="flex gap-2 h-1.5 w-full bg-surface-variant/35 rounded-full overflow-hidden">
-          <div
-            className={`h-full bg-primary rounded-full transition-all duration-500`}
-            style={{ width: `${(step / 3) * 100}%` }}
-          />
-        </div>
-      </header>
+    <div className="w-full max-w-[720px] mx-auto select-none pb-4">
+      <motion.div
+        initial={{ opacity: 0, y: reduceMotion ? 0 : 24 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.55, ease: [0.16, 1, 0.3, 1] }}
+        className="rounded-[26px] bg-surface-container-lowest border border-white/70 shadow-[0_28px_70px_-34px_rgba(0,60,90,0.5)]"
+      >
+        {/* 목적지 사진 헤더 — 고른 여행지에 따라 사진이 바뀐다 */}
+        <div className="relative h-44 md:h-52 overflow-hidden rounded-t-[26px]">
+          <AnimatePresence initial={false}>
+            <motion.img
+              key={destinationPhoto}
+              src={destinationPhoto}
+              alt=""
+              aria-hidden="true"
+              decoding="async"
+              initial={{ opacity: 0, scale: reduceMotion ? 1 : 1.08 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.9, ease: [0.16, 1, 0.3, 1] }}
+              className="absolute inset-0 w-full h-full object-cover"
+            />
+          </AnimatePresence>
+          <div className="absolute inset-0 bg-gradient-to-t from-[#00131c]/95 via-[#00131c]/55 to-[#00131c]/15" />
 
-      {/* Hero Welcome Prompts */}
-      <div className="mb-8">
-        <h2 className="font-headline-lg-mobile md:font-headline-lg text-headline-lg-mobile md:text-headline-lg text-on-surface font-extrabold leading-tight">
-          {step === 1 && (
-            <>
-              <span className="text-primary-container">꿈꾸던 여행</span>을 시작해보세요.
-            </>
-          )}
-          {step === 2 && "취향을 알려주세요."}
-          {step === 3 && "반드시 방문하고 싶은 장소"}
-        </h2>
-        <p className="text-on-surface-variant font-body-md text-sm mt-1">
-          {step === 1 && "기본 정보를 입력해주시면 AI가 맞춤 일정을 제안해 드립니다."}
-          {step === 2 && "입력하신 정보를 바탕으로 당신만을 위한 맞춤 일정을 구성합니다."}
-          {step === 3 && "놓치고 싶지 않은 랜드마크, 식당 또는 경험을 태그로 추가해 주세요."}
-        </p>
-      </div>
+          <div className="relative h-full flex flex-col justify-end p-6 md:p-7">
+            <div className="flex items-center justify-between mb-2.5">
+              <span className="font-label-md text-primary-fixed-dim font-extrabold text-[11px] uppercase tracking-[0.22em]">
+                Step {step} / 3
+              </span>
+              <span className="font-label-sm text-white/60 text-xs font-semibold">
+                {step === 1 && "기본 정보 & 분위기"}
+                {step === 2 && "나의 여행 취향"}
+                {step === 3 && "최종 세부사항"}
+              </span>
+            </div>
+            <h2 className="font-headline-lg text-white text-[26px] md:text-[32px] font-extrabold leading-tight tracking-[-0.02em]">
+              {step === 1 && (
+                <>
+                  <span className="text-primary-fixed-dim">꿈꾸던 여행</span>을 시작해보세요.
+                </>
+              )}
+              {step === 2 && "취향을 알려주세요."}
+              {step === 3 && "반드시 가고 싶은 곳"}
+            </h2>
+            <p className="text-white/70 font-body-md text-sm mt-1.5">
+              {step === 1 && "기본 정보를 입력해주시면 AI가 맞춤 일정을 제안해 드립니다."}
+              {step === 2 && "입력하신 정보를 바탕으로 당신만을 위한 맞춤 일정을 구성합니다."}
+              {step === 3 && "놓치고 싶지 않은 랜드마크, 식당 또는 경험을 태그로 추가해 주세요."}
+            </p>
+          </div>
 
-      {/* Step Contents */}
-      <div className="space-y-6">
+          {/* 진행 바 — 사진과 본문이 만나는 경계선에 붙인다 */}
+          <div className="absolute bottom-0 left-0 right-0 h-1 bg-white/25">
+            <motion.div
+              className="h-full bg-primary-container"
+              initial={false}
+              animate={{ width: `${(step / 3) * 100}%` }}
+              transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+            />
+          </div>
+        </div>
+
+        <div className="p-6 md:p-8">
+          {/* 단계 전환. direction에 따라 들어오고 나가는 방향이 뒤집힌다. */}
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.div
+              key={step}
+              initial={{ opacity: 0, x: reduceMotion ? 0 : direction * 36 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: reduceMotion ? 0 : direction * -36 }}
+              transition={{ duration: 0.32, ease: [0.16, 1, 0.3, 1] }}
+              className="space-y-6"
+            >
         {step === 1 && (
           <div className="space-y-5">
             {/* Field: Trip Name */}
@@ -240,7 +308,11 @@ export default function PlannerFlow({
                   value={tripTitle}
                   onChange={(e) => setTripTitle(e.target.value)}
                   className="w-full bg-transparent border-none py-4 pl-12 pr-4 rounded-xl focus:ring-0 text-on-surface font-body-md placeholder:text-outline-variant outline-none"
-                  placeholder="예: 아말피 해안에서의 여름"
+                  placeholder={
+                    destination.trim()
+                      ? `예: ${destination.trim()}에서의 여름`
+                      : "예: 제주도에서의 여름"
+                  }
                 />
               </div>
             </div>
@@ -364,20 +436,32 @@ export default function PlannerFlow({
               <div className="flex items-center gap-2">
                 <span className="material-symbols-outlined text-primary text-xl">style</span>
                 <h3 className="font-headline-md text-base leading-6 font-bold">여행 스타일</h3>
+                <span
+                  aria-live="polite"
+                  className={`ml-auto font-label-md text-xs font-bold tabular-nums ${
+                    isStyleLimitReached ? "text-primary" : "text-on-surface-variant"
+                  }`}
+                >
+                  {styles.length} / {MAX_STYLES}
+                </span>
               </div>
               <div className="flex flex-wrap gap-2">
                 {travelStyles.map((style) => {
                   const isActive = styles.includes(style.label);
+                  // 상한에 걸린 항목은 흐리게 보여 주되 클릭은 살려 둔다.
+                  // disabled로 막으면 왜 안 눌리는지 알려줄 기회가 없다.
+                  const isMuted = !isActive && isStyleLimitReached;
                   return (
                     <button
                       key={style.label}
                       type="button"
+                      aria-pressed={isActive}
                       onClick={() => toggleStyle(style.label)}
                       className={`flex items-center gap-2 px-4 py-2.5 rounded-full border transition-all active:scale-95 cursor-pointer ${
                         isActive
                           ? "bg-primary border-primary text-white font-semibold"
                           : "border-outline-variant bg-surface-container-lowest text-on-surface-variant hover:border-slate-400"
-                      }`}
+                      } ${isMuted ? "opacity-40" : ""}`}
                     >
                       <span className="material-symbols-outlined text-[16px] flex items-center justify-center">
                         {style.icon}
@@ -436,8 +520,8 @@ export default function PlannerFlow({
               </div>
               <div className="grid grid-cols-2 gap-3">
                 {[
-                  { label: "여유롭게", desc: "하루 3곳 (식사 제외)", icon: "self_improvement" },
-                  { label: "빡빡하게", desc: "하루 5곳 (식사 제외)", icon: "directions_run" }
+                  { label: "여유롭게", desc: "하루 1~3곳 (식사 제외)", icon: "self_improvement" },
+                  { label: "빡빡하게", desc: "하루 4~8곳 (식사 제외)", icon: "directions_run" }
                 ].map((opt) => {
                   const isActive = intensity === opt.label;
                   return (
@@ -534,14 +618,21 @@ export default function PlannerFlow({
                   onChange={(e) => setTagInput(e.target.value)}
                   onKeyDown={handleAddTag}
                   className="flex-1 bg-transparent border-none focus:ring-0 p-0 text-body-md text-on-surface min-w-[120px] outline-none h-6 text-sm"
-                  placeholder="예: 츠키지 시장, 루브르 박물관, 에펠탑 등"
+                  placeholder={
+                    recommendedSpots.length > 0
+                      ? `예: ${recommendedSpots.slice(0, 2).join(", ")} 등`
+                      : "예: 성산일출봉, 감천문화마을, 전주한옥마을 등"
+                  }
                 />
               </div>
 
-              {/* Sample suggestion buttons */}
+              {/* 선택한 목적지의 실제 명소를 추천한다. 매칭되는 곳이 없으면 줄 자체를 감춘다. */}
+              {recommendedSpots.length > 0 && (
               <div className="flex flex-wrap gap-1.5 items-center pt-1.5">
-                <span className="font-label-sm text-on-surface-variant text-xs mr-1 opacity-80">추천 장소:</span>
-                {["몽마르뜨 언덕", "세느강 크루즈", "현지 로컬빵집", "전망대"].map((sg) => (
+                <span className="font-label-sm text-on-surface-variant text-xs mr-1 opacity-80">
+                  {destination.trim()} 추천 장소:
+                </span>
+                {recommendedSpots.map((sg) => (
                   <button
                     key={sg}
                     type="button"
@@ -556,6 +647,7 @@ export default function PlannerFlow({
                   </button>
                 ))}
               </div>
+              )}
             </div>
 
             {/* Field: Comments requesting prompt adjustments */}
@@ -590,13 +682,14 @@ export default function PlannerFlow({
             </div>
           </div>
         )}
-      </div>
+            </motion.div>
+          </AnimatePresence>
 
-      {/* Stepper Actions footer */}
-      <footer className="pt-10 flex items-center justify-between gap-4">
+          {/* Stepper Actions footer */}
+          <footer className="pt-8 flex items-center justify-between gap-4">
         {step > 1 ? (
           <button
-            onClick={() => setStep(step - 1)}
+            onClick={() => goToStep(step - 1)}
             type="button"
             className="px-6 py-3.5 rounded-xl border border-outline-variant hover:border-slate-400 font-label-md text-sm text-on-surface-variant font-bold bg-white active:scale-95 transition-all flex items-center gap-2 cursor-pointer"
           >
@@ -624,7 +717,7 @@ export default function PlannerFlow({
                   return;
                 }
               }
-              setStep(step + 1);
+              goToStep(step + 1);
             }}
             type="button"
             className="flex-grow sm:flex-initial px-8 py-3.5 rounded-xl bg-primary text-white font-bold font-label-md text-sm shadow-md hover:opacity-95 active:scale-95 transition-all flex justify-center items-center gap-2 cursor-pointer border-none"
@@ -642,7 +735,9 @@ export default function PlannerFlow({
             <SparklesIcon className="w-4 h-4" />
           </button>
         )}
-      </footer>
+          </footer>
+        </div>
+      </motion.div>
     </div>
   );
 }
