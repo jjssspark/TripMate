@@ -82,7 +82,7 @@ Supabase (Auth + PostgreSQL) ◄── 브라우저에서 직접 호출
 
 1. **번들 크기** — `app` 청크가 gzip 164KB입니다. Leaflet과 motion을 동적 import로 분리할 여지가 있습니다.
 2. **서버 로직 중복** — 위 "이중 서버 계층" 참고.
-3. **테스트 부재** — `tests/` 디렉터리가 없습니다. 최소한 일정 생성 응답 파싱과 `planDisplay.ts`의 단위 테스트가 필요합니다.
+3. **테스트 커버리지 협소** — `tests/lib/`에 목적지 검색·초성 변환(`destinations.ts`)과 추천 스팟 조회(`recommendedSpots.ts`) 단위 테스트 11개가 있습니다(`npm test`). 일정 생성 응답 파싱, `planDisplay.ts`, API 라우트 핸들러는 아직 대상 밖입니다.
 4. **파일 크기** — `server/server.ts` 845줄, `PlanResultView.tsx` 834줄로 코딩 규약의 800줄 상한을 넘습니다.
 5. **`any` 타입 57곳** — Gemini 응답과 Supabase 반환값의 타입 경계에 몰려 있습니다. 응답 스키마 타입을 정의하면 대부분 제거됩니다.
    그때까지 `eslint.config.js`에서 `@typescript-eslint/no-explicit-any`를 `warn`으로 두고 lint 출력에 계속 노출시켜 추적합니다.

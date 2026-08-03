@@ -45,3 +45,9 @@ __pycache__/
 
 # 로컬 dev 서버(server.ts)의 파일 DB — 런타임에 자동 생성됨
 data/
+
+# 포폴 산출물 원본 — 용량이 커서 저장소에 넣지 않는다.
+# 최적화본(output/screenshots/*.jpg, output/video/demo*.mp4|gif)만 커밋한다.
+output/screenshots/_raw/
+output/video/*.mov
+output/video/*.MOV

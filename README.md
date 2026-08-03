@@ -10,6 +10,8 @@ AI 기술을 활용하여 사용자의 취향과 일정에 맞는 최적의 여�
 >
 > TripMate AI는 로그인 후 간단한 여행지, 일정, 예산, 동행 유형, 그리고 선호하는 스타일(맛집, 쇼핑, 자연 등)을 입력하면 AI가 동선과 식사 시간대를 고려한 완성도 높은 여행 일정을 생성하고, 이를 저장 및 관리할 수 있도록 돕는 서비스입니다.
 
+🔗 [배포 바로가기](https://tripgather.netlify.app)
+
 ---
 
 ## 🚀 핵심 기능 (MVP 및 선택 기능)
@@ -57,24 +59,43 @@ AI 기술을 활용하여 사용자의 취향과 일정에 맞는 최적의 여�
 
 ## 📊 데이터베이스 스키마
 
-### `travel_plans` 테이블 구성
+`users` → `travel_plans` → `travel_items` 3단 구조입니다. 일정 메타데이터(`travel_plans`)와 Day별 활동(`travel_items`)이 분리돼 있고, 하나의 jsonb 컬럼에 몰아넣지 않습니다.
 
-| 컬럼명 | 타입 | 설명 | 제약 조건 |
-| :--- | :--- | :--- | :--- |
-| `id` | `uuid` | 여행 일정 고유 식별자 | Primary Key, `default_generate_v4()` |
-| `user_id` | `uuid` | 작성한 사용자의 고유 ID | Foreign Key (Supabase `auth.users.id`) |
-| `title` | `text` | 여행 계획 제목 | `NOT NULL` |
-| `destination` | `text` | 여행 도시/국가 | `NOT NULL` |
-| `start_date` | `date` | 여행 시작일 | `NOT NULL` |
-| `end_date` | `date` | 여행 종료일 | `NOT NULL` |
-| `duration` | `text` | 여행 기간 (예: 2박 3일) | `NOT NULL` |
-| `budget` | `text` | 여행 예산 설정 | - |
-| `companion` | `text` | 동행 유형 (나홀로, 친구, 가족, 연인 등) | - |
-| `styles` | `text[]` | 선호 여행 스타일 키워드 배열 | - |
-| `must_visit_places`| `text` | 꼭 방문해야 할 장소 | - |
-| `plan_content` | `jsonb` | AI가 생성한 Day별 상세 일정 데이터 | `NOT NULL` |
-| `created_at` | `timestamptz` | 생성 일시 | `default now()` |
-| `updated_at` | `timestamptz` | 수정 일시 | `default now()` |
+```
+auth.users ──< users(user_seq) ──< travel_plans(id) ──< travel_items(plan_id)
+```
+
+### `travel_plans` — 일정 메타데이터
+
+| 컬럼명 | 타입 | 설명 |
+| :--- | :--- | :--- |
+| `id` | `uuid` | Primary Key |
+| `user_seq` | `int` | `users.user_seq` 참조 |
+| `title` | `text` | 여행 계획 제목 |
+| `destination` | `text` | 목적지 |
+| `start_date` / `end_date` | `date` | 여행 기간 |
+| `budget` | `text` | 예산 수준 |
+| `companion` | `text` | 동행 유형 |
+| `styles` | `text[]` | 선호 스타일 키워드 |
+| `must_visit_places` | `text[]` | 필수 방문 장소 |
+| `is_shared` | `boolean` | 공유 링크(`/trip/:id`) 공개 여부 |
+| `created_at` | `timestamptz` | 생성 일시 |
+
+### `travel_items` — Day별 활동
+
+| 컬럼명 | 타입 | 설명 |
+| :--- | :--- | :--- |
+| `id` | Primary Key | — |
+| `plan_id` | `uuid` | `travel_plans.id` 참조 |
+| `day_number` | `int` | 몇 일차 |
+| `visit_time` | `time` | 방문 시각 |
+| `place_name` | `text` | 실제 상호명 |
+| `category` | `text` | 관광 / 맛집 / 카페 / 쇼핑 / 숙소 / 이동 |
+| `sequence` | `int` | 같은 day 안에서의 순서 |
+| `is_must_visit` | `boolean` | 필수 방문 여부 |
+| `image_url` | `text` | 실제 장소 사진 URL |
+
+전체 컬럼 목록, `users`/`profiles` 테이블, RLS 정책과 알려진 이상 지점(중복 프로필 테이블, 컬럼명 오타 등)은 [docs/DATABASE.md](docs/DATABASE.md)에 정리했습니다.
 
 ---
 
