@@ -179,4 +179,10 @@ npm run lint       # ESLint
 ## Troubleshooting_요약
 - 조용한 실패 두 건 : 빌드는 성공했지만 PWA 아이콘이 통째로 누락됐던 `publicDir` 설정 오류, AI 응답 지연 시 사용자 모르게 목업 일정이 나가던 타임아웃 예산 버그 — 둘 다 "에러가 없다"는 게 오히려 함정이었습니다.
 - 인프라 이슈 진단 : Supabase 무료 플랜 자동 일시정지로 전 기능이 `Failed to fetch`로 죽었던 사고를 DNS 계층부터 추적해 원인을 좁혔습니다.
-- 전체 5건(재현 조건·틀렸던 가설·검증 로그 포함)은 [노션 문서](https://app.notion.com/p/Project-1-8a2f6f1e619a8273aaa501736c402e60?source=copy_link)에 정리했습니다.
+- 전체 5건(재현 조건·틀렸던 가설·검증 로그 포함)은 [노션 문서](https://app.notion.com/p/3b1f6f1e619a80aeb0a8fbc1532d0f73?source=copy_link)에 정리했습니다.
+
+
+## ADR 요약
+- Gemini 2.5 Flash / Flash-Lite 이원화: thinking 모드를 끄고 주 모델 실패 시 보조 모델로 자동 전환해 서버리스 함수의 동기 타임아웃 제약 안에서 응답 속도를 확보했습니다.
+- 명소 추천은 정적 데이터, 사진만 Google Places로 동적 조회: 실시간 텍스트 검색은 "진짜 유명한 곳"을 보장하지 못해, 신뢰할 수 있는 정적 목록 + 실사진 하이브리드로 설계했습니다.
+- 전체 결정 과정(고려한 대안, 근거, 실제 결과)은 [노션 ADR 문서][https://app.notion.com/p/ADR-3b1f6f1e619a80fdb329cde5988f01e0?source=copy_link]에 정리했습니다.
