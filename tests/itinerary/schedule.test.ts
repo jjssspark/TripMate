@@ -80,4 +80,16 @@ describe("insertMeals", () => {
     const 일부만 = new Map<MealType, ResolvedPlace>([["점심", 식당("점심")]]);
     expect(insertMeals(layoutDay(근접4곳, "자차", "빡빡하게"), 일부만).filter((a) => a.isMeal)).toHaveLength(1);
   });
+
+  it("어떤 활동도 다른 활동이 진행 중인 시각에 시작하지 않는다", () => {
+    // 하한 규칙 때문에 하루가 길어진 날에도 식사가 활동 안에 박히면 안 된다
+    const acts = insertMeals(
+      layoutDay(멀리떨어진8곳, "대중교통", "빡빡하게"),
+      식사맵,
+    );
+    for (let i = 1; i < acts.length; i += 1) {
+      const prev = acts[i - 1];
+      expect(acts[i].startMinutes).toBeGreaterThanOrEqual(prev.startMinutes + prev.stayMinutes);
+    }
+  });
 });

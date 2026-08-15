@@ -75,10 +75,12 @@ export function layoutDay(
 
     const tail = activities[activities.length - 1];
     const rawDinner = tail.startMinutes + tail.stayMinutes + 15;
+    // 하한 규칙이 하루를 19:30 너머까지 밀어낸 날은 저녁을 창 안으로 끌어내리면
+    // 아직 진행 중인 활동과 겹친다. 그런 날만 마지막 활동 뒤로 보낸다.
     mealSlots.push({
       mealType: "저녁",
       near: tail.place,
-      atMinutes: Math.min(DINNER_MAX, Math.max(GENERAL_END_LIMIT, rawDinner)),
+      atMinutes: rawDinner > DINNER_MAX ? rawDinner : Math.max(GENERAL_END_LIMIT, rawDinner),
     });
   }
 
