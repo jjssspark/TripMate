@@ -78,9 +78,58 @@ describe("assignToDays", () => {
 
 describe("fillToMinimum", () => {
   it("하한 미달 클러스터를 leftover에서 가장 가까운 것으로 채운다", () => {
-    const before = assignToDays(many, 4, "여유롭게");
-    const after = fillToMinimum(before, 3);
-    expect(after.buckets.flat().length).toBeGreaterThanOrEqual(before.buckets.flat().length);
-    after.buckets.forEach((b) => expect(b.length).toBeGreaterThanOrEqual(3));
+    // Arrange — 동부·서부 중심에 한 곳씩만 배정된 상태. 나머지는 미배정.
+    const assignment = {
+      buckets: [[동부[0]], [서부[0]]],
+      centers: [
+        { lat: 33.4591, lng: 126.9405 },
+        { lat: 33.3939, lng: 126.2396 },
+      ],
+      leftover: [동부[1], 서부[1], 동부[2], 서부[2]],
+    };
+
+    // Act
+    const after = fillToMinimum(assignment, 2);
+
+    // Assert — 각 클러스터가 자기 중심에 가장 가까운 것을 하나씩 가져간다
+    expect(after.buckets[0].map((p) => p.id)).toEqual(["1", "3"]);
+    expect(after.buckets[1].map((p) => p.id)).toEqual(["4", "5"]);
+    expect(after.leftover.map((p) => p.id)).toEqual(["2", "6"]);
+  });
+
+  it("leftover가 비면 하한에 못 미쳐도 그대로 둔다", () => {
+    // Arrange
+    const assignment = {
+      buckets: [[동부[0]], [서부[0]]],
+      centers: [
+        { lat: 33.4591, lng: 126.9405 },
+        { lat: 33.3939, lng: 126.2396 },
+      ],
+      leftover: [],
+    };
+
+    // Act
+    const after = fillToMinimum(assignment, 4);
+
+    // Assert
+    expect(after.buckets[0]).toHaveLength(1);
+    expect(after.buckets[1]).toHaveLength(1);
+  });
+
+  it("입력 assignment를 변형하지 않는다", () => {
+    // Arrange
+    const leftover = [동부[1], 동부[2]];
+    const assignment = {
+      buckets: [[동부[0]]],
+      centers: [{ lat: 33.4591, lng: 126.9405 }],
+      leftover,
+    };
+
+    // Act
+    fillToMinimum(assignment, 3);
+
+    // Assert — 원본 배열이 그대로여야 한다 (불변성)
+    expect(assignment.buckets[0]).toHaveLength(1);
+    expect(leftover).toHaveLength(2);
   });
 });
