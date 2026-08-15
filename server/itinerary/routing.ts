@@ -5,7 +5,7 @@ import type { Coord, Intensity, ResolvedPlace } from "./types";
 const DUPLICATE_METERS = 50;
 
 export function normalizeName(name: string): string {
-  return name.replace(/[\s\-_.!?',]/g, "").toLowerCase();
+  return name.replace(/[^\p{L}\p{N}]/gu, "").toLowerCase();
 }
 
 /** 앞에 온 것을 남긴다. 필수 방문지를 먼저 넣어야 살아남는다. */
