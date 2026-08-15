@@ -141,3 +141,76 @@ export function fillToMinimum(assignment: DayAssignment, min: number): DayAssign
 
   return { buckets, centers: assignment.centers, leftover: pool };
 }
+
+const BRUTE_FORCE_LIMIT = 8;
+
+export function totalPathKm(points: readonly Coord[], from: Coord | null): number {
+  if (points.length === 0) return 0;
+  let cost = from ? haversineKm(from, points[0]) : 0;
+  for (let i = 1; i < points.length; i += 1) cost += haversineKm(points[i - 1], points[i]);
+  return cost;
+}
+
+function permutations<T>(items: readonly T[]): T[][] {
+  if (items.length <= 1) return [[...items]];
+  const out: T[][] = [];
+  items.forEach((item, i) => {
+    const rest = [...items.slice(0, i), ...items.slice(i + 1)];
+    permutations(rest).forEach((perm) => out.push([item, ...perm]));
+  });
+  return out;
+}
+
+function nearestNeighbour<T extends Coord>(points: readonly T[], from: Coord | null): T[] {
+  const pool = [...points];
+  const out: T[] = [];
+  let cursor: Coord | null = from;
+  while (pool.length > 0) {
+    let bestIdx = 0;
+    if (cursor) {
+      let bestDist = Infinity;
+      const c = cursor;
+      pool.forEach((p, i) => {
+        const d = haversineKm(c, p);
+        if (d < bestDist) {
+          bestDist = d;
+          bestIdx = i;
+        }
+      });
+    }
+    const picked = pool.splice(bestIdx, 1)[0];
+    out.push(picked);
+    cursor = picked;
+  }
+  return out;
+}
+
+function shortestOrder<T extends Coord>(points: readonly T[], from: Coord | null): T[] {
+  if (points.length <= 2) return [...points];
+  if (points.length > BRUTE_FORCE_LIMIT) return nearestNeighbour(points, from);
+
+  let best = [...points];
+  let bestCost = Infinity;
+  for (const perm of permutations(points)) {
+    const cost = totalPathKm(perm, from);
+    if (cost < bestCost) {
+      bestCost = cost;
+      best = perm;
+    }
+  }
+  return best;
+}
+
+/** 클러스터 정원이 8이라 완전탐색이 가능하다. 초과 시에만 근사로 내려간다. */
+export function orderWithinDay(
+  places: readonly ResolvedPlace[],
+  from: Coord | null,
+): ResolvedPlace[] {
+  return shortestOrder(places, from);
+}
+
+/** 권역 중심들의 방문 순서. 반환값은 centers 배열의 인덱스다. */
+export function orderDays(centers: readonly Coord[]): number[] {
+  const indexed = centers.map((c, i) => ({ ...c, idx: i }));
+  return shortestOrder(indexed, null).map((c) => c.idx);
+}
