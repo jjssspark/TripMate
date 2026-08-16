@@ -10,7 +10,11 @@ export type PhotoDay = Omit<PlanDay, "activities"> & { activities: PhotoActivity
 // -------------------------------------------------------------
 // Google Places 실사진 조회 (서버 전용 키 — 클라이언트에는 절대 노출하지 않음)
 // -------------------------------------------------------------
-const googlePlacesApiKey = process.env.GOOGLE_PLACES_API_KEY || "";
+// 모듈 최상위에서 캡처하면 안 된다. server.ts가 이 모듈을 import한 뒤에 dotenv.config()를
+// 부르는데 ESM은 import 대상을 먼저 평가하므로 항상 빈 문자열이 잡힌다.
+function googlePlacesApiKey(): string {
+  return process.env.GOOGLE_PLACES_API_KEY || "";
+}
 
 export function fetchJsonHttps(url: string): Promise<any> {
   return new Promise((resolve, reject) => {
@@ -30,15 +34,20 @@ export function fetchJsonHttps(url: string): Promise<any> {
 
 // 장소명 + 목적지로 Google Places를 검색해 실제 사진의 photo_reference를 찾는다.
 // 키가 없거나 검색 결과가 없으면 null을 반환해 호출부가 목업 이미지로 폴백하도록 한다.
-export async function fetchRealPlacePhotoRef(placeName: string, destination: string): Promise<string | null> {
-  if (!googlePlacesApiKey) return null;
+export async function fetchRealPlacePhotoRef(
+  placeName: string,
+  destination: string,
+  fetchJson: (url: string) => Promise<any> = fetchJsonHttps,
+): Promise<string | null> {
+  const key = googlePlacesApiKey();
+  if (!key) return null;
 
   try {
     const query = `${destination} ${placeName}`;
     const url = `https://maps.googleapis.com/maps/api/place/findplacefromtext/json?input=${encodeURIComponent(
       query
-    )}&inputtype=textquery&fields=photos&key=${googlePlacesApiKey}`;
-    const data = await fetchJsonHttps(url);
+    )}&inputtype=textquery&fields=photos&key=${key}`;
+    const data = await fetchJson(url);
     const photoRef = data?.candidates?.[0]?.photos?.[0]?.photo_reference;
     return photoRef || null;
   } catch (err) {
