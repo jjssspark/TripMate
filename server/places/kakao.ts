@@ -16,9 +16,14 @@ export function isGenericName(name: string): boolean {
 
 const normalize = (s: string) => s.replace(/[^\p{L}\p{N}]/gu, "").toLowerCase();
 
+const MIN_CONTAINMENT_CHARS = 3;
+
 export function matchesRequest(requested: string, returned: string): boolean {
   const a = normalize(requested);
   const b = normalize(returned);
+  if (a === b) return true;
+  // 짧은 이름은 무관한 긴 상호에 우연히 포함된다. "산"이 "한라산아래첫마을"에 걸리는 식.
+  if (Math.min(a.length, b.length) < MIN_CONTAINMENT_CHARS) return false;
   return a.includes(b) || b.includes(a);
 }
 
@@ -27,9 +32,13 @@ const CODE_MAP: Record<string, PlaceCategory> = {
 };
 const NATURE_TOKENS = ["자연", "산", "해수욕장", "폭포", "오름", "공원"];
 
+// 코드가 확정적이면 그대로 믿는다. 카카오는 성산일출봉처럼 코드를 비워 보내는 경우가
+// 있고, AT4에는 해수욕장과 전망대가 함께 들어온다 — 그 둘만 이름으로 다시 가른다.
 export function mapCategory(code: string, categoryName: string): PlaceCategory {
+  const mapped = CODE_MAP[code];
+  if (mapped && mapped !== "관광") return mapped;
   if (NATURE_TOKENS.some((t) => categoryName.includes(t))) return "자연";
-  return CODE_MAP[code] ?? "관광";
+  return mapped ?? "관광";
 }
 
 type KakaoDoc = {

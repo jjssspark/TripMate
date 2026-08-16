@@ -11,8 +11,13 @@ const 성산일출봉응답 = {
   }],
 };
 
-const fakeFetch = (payload: unknown): typeof fetch =>
-  (async () => ({ ok: true, status: 200, json: async () => payload })) as unknown as typeof fetch;
+type FetchCall = { url: string; init?: RequestInit };
+
+const fakeFetch = (payload: unknown, calls: FetchCall[] = []): typeof fetch =>
+  (async (url: string, init?: RequestInit) => {
+    calls.push({ url, init });
+    return { ok: true, status: 200, json: async () => payload };
+  }) as unknown as typeof fetch;
 
 describe("isGenericName", () => {
   it("일반명사가 섞인 후보를 걸러낸다", () => {
@@ -78,5 +83,51 @@ describe("createKakaoResolver", () => {
     }) as unknown as typeof fetch);
     expect(await resolver.resolve("제주도 소문난 맛집", "제주도")).toBeNull();
     expect(called).toBe(false);
+  });
+
+  it("Authorization 헤더를 담고, 이름을 percent-encoding해서 쿼리스트링에 싣는다", async () => {
+    const calls: FetchCall[] = [];
+    const resolver = createKakaoResolver("test-key", fakeFetch(성산일출봉응답, calls));
+    await resolver.resolve("성산일출봉", "제주도");
+    expect(calls).toHaveLength(1);
+    const headers = calls[0].init?.headers as Record<string, string> | undefined;
+    expect(headers?.Authorization).toBe("KakaoAK test-key");
+    expect(calls[0].url).toContain(encodeURIComponent("제주도 성산일출봉"));
+  });
+
+  it("res.ok가 false면 상태 코드만 담아 에러를 던지고, 키나 URL을 노출하지 않는다", async () => {
+    const resolver = createKakaoResolver("secret-key", (async () => ({
+      ok: false, status: 429, json: async () => ({}),
+    })) as unknown as typeof fetch);
+    await expect(resolver.resolve("성산일출봉", "제주도")).rejects.toThrow("카카오 로컬 API 실패: 429");
+    try {
+      await resolver.resolve("성산일출봉", "제주도");
+      throw new Error("에러가 던져지지 않음");
+    } catch (e) {
+      const message = (e as Error).message;
+      expect(message).not.toContain("secret-key");
+      expect(message).not.toContain("dapi.kakao.com");
+    }
+  });
+
+  it("searchNearby는 카테고리 검색 응답을 ResolvedPlace[]로 매핑하고, 카테고리 코드를 요청 URL에 싣는다", async () => {
+    const calls: FetchCall[] = [];
+    const payload = {
+      documents: [{
+        id: "27459317", place_name: "꽃담수제버거", category_group_code: "FD6", category_name: "음식점 > 패스트푸드",
+        x: "126.93607071345474", y: "33.462977212240034",
+        road_address_name: "제주특별자치도 서귀포시 성산읍 일출로 284-7", address_name: "",
+        place_url: "http://place.map.kakao.com/27459317",
+      }],
+    };
+    const resolver = createKakaoResolver("key", fakeFetch(payload, calls));
+    const result = await resolver.searchNearby(33.4591, 126.9405, "FD6", 1000);
+    expect(result).toEqual([{
+      id: "27459317", name: "꽃담수제버거", category: "맛집",
+      lat: 33.462977212240034, lng: 126.93607071345474,
+      address: "제주특별자치도 서귀포시 성산읍 일출로 284-7",
+      placeUrl: "http://place.map.kakao.com/27459317", mustVisit: false,
+    }]);
+    expect(calls[0].url).toContain("category_group_code=FD6");
   });
 });
