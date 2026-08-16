@@ -1,5 +1,11 @@
 import https from "https";
-import type { PlanDay } from "../itinerary/pipeline";
+import { withTimeout } from "../itinerary/timeout";
+import type { PlanActivity, PlanDay } from "../itinerary/pipeline";
+
+const PHOTO_TIMEOUT_MS = 2_500;
+
+export type PhotoActivity = PlanActivity & { imageUrl: string };
+export type PhotoDay = Omit<PlanDay, "activities"> & { activities: PhotoActivity[] };
 
 // -------------------------------------------------------------
 // Google Places 실사진 조회 (서버 전용 키 — 클라이언트에는 절대 노출하지 않음)
@@ -104,14 +110,18 @@ export function getMockupImage(category: string, destination: string, index: num
   return "https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=500&auto=format&fit=crop";
 }
 
-/** 사진은 부가 정보다. 실패해도 일정 자체는 내보낸다. */
-export async function attachPhotos(days: PlanDay[], destination: string) {
+/** 사진은 부가 정보다. 실패하든 느리든 목업으로 내리고 일정 자체는 내보낸다. */
+export async function attachPhotos(days: PlanDay[], destination: string): Promise<PhotoDay[]> {
   return Promise.all(
     days.map(async (day) => ({
       ...day,
       activities: await Promise.all(
-        day.activities.map(async (act, idx) => {
-          const ref = await fetchRealPlacePhotoRef(act.title, destination).catch(() => null);
+        day.activities.map(async (act, idx): Promise<PhotoActivity> => {
+          const ref = await withTimeout(
+            fetchRealPlacePhotoRef(act.title, destination),
+            PHOTO_TIMEOUT_MS,
+            "사진 조회",
+          ).catch(() => null);
           return {
             ...act,
             imageUrl: ref

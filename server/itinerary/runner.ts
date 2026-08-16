@@ -3,20 +3,11 @@ import { fetchCandidates } from "./candidates";
 import { narrateDay } from "./narrate";
 import { generateItinerary, type PlanRequest } from "./pipeline";
 import { createKakaoResolver } from "../places/kakao";
+import { withTimeout } from "./timeout";
 
 const CANDIDATE_TIMEOUT_MS = 8_000;
+const CANDIDATE_RETRY_TIMEOUT_MS = 5_000;
 const NARRATE_TIMEOUT_MS = 10_000;
-
-// 외부 호출은 스스로 멈추지 않는다. 단계마다 예산을 걸어 전체 30초를 지킨다.
-function withTimeout<T>(task: Promise<T>, ms: number, label: string): Promise<T> {
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error(`${label}: ${ms}ms 초과`)), ms);
-    task.then(
-      (v) => { clearTimeout(timer); resolve(v); },
-      (e) => { clearTimeout(timer); reject(e); },
-    );
-  });
-}
 
 export async function runPipeline(request: PlanRequest) {
   const geminiKey = process.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
@@ -35,7 +26,7 @@ export async function runPipeline(request: PlanRequest) {
       // 1단계는 파이프라인 전체의 전제다. 한 번만 재시도한다.
       fetchCandidates: (req) =>
         withTimeout(fetchCandidates(ai, req), CANDIDATE_TIMEOUT_MS, "후보 추출").catch(() =>
-          withTimeout(fetchCandidates(ai, req), CANDIDATE_TIMEOUT_MS, "후보 추출 재시도"),
+          withTimeout(fetchCandidates(ai, req), CANDIDATE_RETRY_TIMEOUT_MS, "후보 추출 재시도"),
         ),
       narrateDay: (day, destination) =>
         withTimeout(narrateDay(ai, day, destination), NARRATE_TIMEOUT_MS, `${day.day}일차 설명`),
