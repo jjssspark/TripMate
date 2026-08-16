@@ -36,6 +36,23 @@ export type PlanDay = { day: number; theme: string; description: string; activit
 
 const MEAL_RADIUS_M = 1000;
 
+/**
+ * allSettled는 rejection을 조용히 버린다. 키 쿼터가 소진되면 전 후보가 429로 실패해
+ * "검증된 장소가 0곳" 오류만 남고 서버 로그에는 아무 단서도 남지 않는다.
+ * 사용자 응답에는 넣지 않고 서버 로그에만 남긴다.
+ */
+function logRejections(label: string, settled: readonly PromiseSettledResult<unknown>[]): void {
+  const reasons = settled
+    .filter((s): s is PromiseRejectedResult => s.status === "rejected")
+    .map((s) => (s.reason instanceof Error ? s.reason.message : String(s.reason)));
+  if (reasons.length === 0) return;
+
+  const counts = new Map<string, number>();
+  reasons.forEach((r) => counts.set(r, (counts.get(r) ?? 0) + 1));
+  const summary = [...counts.entries()].map(([msg, n]) => `${msg} x${n}`).join(", ");
+  console.warn(`[TripMate] ${label} ${reasons.length}/${settled.length}건 실패: ${summary}`);
+}
+
 async function resolveAll(
   resolver: PlaceResolver,
   candidates: readonly Candidate[],
@@ -45,6 +62,7 @@ async function resolveAll(
   const settled = await Promise.allSettled(
     candidates.map((c) => resolver.resolve(c.name, destination)),
   );
+  logRejections("장소 검증", settled);
   const mustSet = new Set(mustNames.map(normalizeName));
   const resolved = settled
     .map((s, i) =>
@@ -74,6 +92,7 @@ async function pickMeals(
       ),
     ),
   );
+  logRejections("식당 조회", results);
   results.forEach((r, i) => {
     if (r.status !== "fulfilled") return;
     const pick = r.value.find(
@@ -141,6 +160,7 @@ export async function generateItinerary(
         deps.resolver.searchNearby(assigned.centers[i].lat, assigned.centers[i].lng, "AT4", 5000),
       ),
     );
+    logRejections("AT4 구제 조회", rescued);
     const rescuedPlaces = rescued
       .flatMap((r) => (r.status === "fulfilled" ? r.value : []))
       .filter((p) => !usedIds.has(p.id) && !excluded.has(normalizeName(p.name)));

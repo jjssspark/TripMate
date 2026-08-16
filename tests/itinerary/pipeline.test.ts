@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { generateItinerary, type PipelineDeps, type PlanRequest } from "../../server/itinerary/pipeline";
 import type { PlaceResolver } from "../../server/places/resolver";
 import type { PlaceCategory, ResolvedPlace } from "../../server/itinerary/types";
@@ -161,6 +161,26 @@ describe("generateItinerary", () => {
 
     const titles = result.planContent.flatMap((d) => d.activities.map((a) => a.title));
     expect(titles.filter((t) => t === "B0")).toHaveLength(1);
+  });
+
+  it("카카오 조회가 전부 실패하면 서버 로그에 남기고 사용자 메시지에는 내부 사정을 넣지 않는다", async () => {
+    const 쿼터소진리졸버: PlaceResolver = {
+      async resolve() { throw new Error("카카오 로컬 API 실패: 429"); },
+      async searchNearby() { throw new Error("카카오 로컬 API 실패: 429"); },
+    };
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    try {
+      await expect(generateItinerary({ ...deps, resolver: 쿼터소진리졸버 }, request)).rejects.toThrow();
+      const logged = warn.mock.calls.map((c) => c.join(" ")).join("\n");
+      expect(logged).toContain("429");
+      expect(logged).toContain("12/12건 실패");
+
+      const err = await generateItinerary({ ...deps, resolver: 쿼터소진리졸버 }, request).catch((e) => e);
+      expect(String(err.message)).not.toContain("429");
+    } finally {
+      warn.mockRestore();
+    }
   });
 
   it("설명 생성이 모두 실패하면 narrationDegraded를 세우고 최소 설명으로 채운다", async () => {
