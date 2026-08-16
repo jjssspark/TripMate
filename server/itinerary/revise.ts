@@ -7,6 +7,24 @@ import type { PlanRequest } from "./pipeline";
  * 닿아 카카오 조회를 낭비하지 않게 미리 걸러주는 역할이고, excludeNames는 파이프라인이 후보·식당·
  * AT4 구제 결과에 코드로 직접 거는 필터라 실제로 다시 나오지 않는다는 걸 보장한다.
  */
+// "장소를 바꿔 달라"는 뜻으로 읽히는 표현. 여기 없으면 이전 장소를 배제하지 않는다.
+const CHANGE_KEYWORDS = ["다른", "바꿔", "바꾸", "변경", "말고", "새로운", "빼고", "제외"] as const;
+
+/**
+ * 어떤 피드백에나 이전 장소를 전부 배제하면 마음에 들었던 날의 장소까지 사라지고,
+ * 후보가 적은 지역에서는 배제 후 하한 미달로 수정 자체가 실패한다.
+ * 사용자가 장소를 바꿔 달라고 한 경우에만 배제한다.
+ */
+export function wantsDifferentPlaces(feedback: string): boolean {
+  const normalized = feedback.replace(/\s+/g, "");
+  return CHANGE_KEYWORDS.some((k) => normalized.includes(k));
+}
+
+/** 두 진입점(express·netlify)이 같은 판정을 쓰도록 배제 목록 생성을 여기 둔다. */
+export function excludeNamesFor(feedback: string, previousNames: readonly string[]): string[] {
+  return wantsDifferentPlaces(feedback) ? [...previousNames] : [];
+}
+
 export function mergeFeedbackIntoRequest(
   base: PlanRequest,
   feedback: string,

@@ -1,7 +1,7 @@
 import { runPipeline } from "../../server/itinerary/runner";
 import { attachPhotos } from "../../server/places/photos";
 import { parsePlanInput } from "../../server/itinerary/entry";
-import { mergeFeedbackIntoRequest } from "../../server/itinerary/revise";
+import { mergeFeedbackIntoRequest, excludeNamesFor } from "../../server/itinerary/revise";
 
 // -------------------------------------------------------------
 // Netlify Function Handler — 수정은 요청 조건에 피드백을 병합해 파이프라인을 다시 실행
@@ -40,14 +40,14 @@ export const handler = async (event: any) => {
   const { request } = parsed.value;
   const destination = request.destination;
 
-  // 이전 일정에 있던 장소는 제외 지시로 넘겨, 재생성에서 같은 곳이 다시 나오지 않게 한다.
+  // 장소를 바꿔 달라는 피드백일 때만 이전 장소를 제외 지시로 넘긴다.
   const previousNames: string[] = planContent.flatMap((d: any) =>
     Array.isArray(d.activities) ? d.activities.map((a: any) => a.title) : [],
   );
 
   try {
     const { planContent: revised, narrationDegraded } = await runPipeline(
-      mergeFeedbackIntoRequest(request, feedback, previousNames),
+      mergeFeedbackIntoRequest(request, feedback, excludeNamesFor(feedback, previousNames)),
     );
 
     return {

@@ -13,7 +13,7 @@ import dotenv from "dotenv";
 import { runPipeline } from "./itinerary/runner";
 import { attachPhotos } from "./places/photos";
 import { parsePlanInput } from "./itinerary/entry";
-import { mergeFeedbackIntoRequest } from "./itinerary/revise";
+import { mergeFeedbackIntoRequest, excludeNamesFor } from "./itinerary/revise";
 
 dotenv.config();
 
@@ -285,14 +285,14 @@ app.post("/api/revise-plan", async (req, res) => {
   const { request } = parsed.value;
   const destination = request.destination;
 
-  // 이전 일정에 있던 장소는 제외 지시로 넘겨, 재생성에서 같은 곳이 다시 나오지 않게 한다.
+  // 장소를 바꿔 달라는 피드백일 때만 이전 장소를 제외 지시로 넘긴다.
   const previousNames: string[] = planContent.flatMap((d: any) =>
     Array.isArray(d.activities) ? d.activities.map((a: any) => a.title) : [],
   );
 
   try {
     const { planContent: revised, narrationDegraded } = await runPipeline(
-      mergeFeedbackIntoRequest(request, feedback, previousNames),
+      mergeFeedbackIntoRequest(request, feedback, excludeNamesFor(feedback, previousNames)),
     );
 
     return res.json({
