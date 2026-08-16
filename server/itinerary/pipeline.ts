@@ -105,10 +105,14 @@ export async function generateItinerary(
         deps.resolver.searchNearby(assigned.centers[i].lat, assigned.centers[i].lng, "AT4", 5000),
       ),
     );
-    const extras = rescued
-      .flatMap((r) => (r.status === "fulfilled" ? r.value : []))
-      .filter((p) => !usedIds.has(p.id));
-    assigned = fillToMinimum({ ...assigned, leftover: [...assigned.leftover, ...dedupe(extras)] }, min);
+    const extras = dedupe(
+      rescued
+        .flatMap((r) => (r.status === "fulfilled" ? r.value : []))
+        .filter((p) => !usedIds.has(p.id)),
+    );
+    // 구제로 들어온 장소도 집합에 넣어야 뒤에서 식당으로 다시 뽑히지 않는다.
+    extras.forEach((p) => usedIds.add(p.id));
+    assigned = fillToMinimum({ ...assigned, leftover: [...assigned.leftover, ...extras] }, min);
   }
 
   const dayOrder = orderDays(assigned.centers);
@@ -118,7 +122,7 @@ export async function generateItinerary(
 
   for (const [index, clusterIdx] of dayOrder.entries()) {
     const ordered = orderWithinDay(assigned.buckets[clusterIdx], previousTail);
-    if (ordered.length > 0) previousTail = ordered[ordered.length - 1];
+    previousTail = ordered.length > 0 ? ordered[ordered.length - 1] : null;
 
     const layout = layoutDay(ordered, request.transportMode, request.intensity);
     const meals = await pickMeals(deps.resolver, layout.mealSlots, usedIds);

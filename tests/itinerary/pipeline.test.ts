@@ -30,6 +30,59 @@ const request: PlanRequest = {
   transportMode: "자차", styles: [], mustVisitPlaces: "", comments: "",
 };
 
+function timeToMinutes(time: string): number {
+  const matched = time.match(/^(오전|오후) (\d{2}):(\d{2})$/);
+  if (!matched) throw new Error(`시간 형식이 올바르지 않습니다: ${time}`);
+  const [, period, hh, mm] = matched;
+  let hours = Number(hh) % 12;
+  if (period === "오후") hours += 12;
+  return hours * 60 + Number(mm);
+}
+
+// 여유롭게(min 1, max 3)로는 클러스터가 하한을 밑돌 일이 없어 AT4 구제가 발동하지 않는다.
+// 빡빡하게(min 4)로 A군집 10곳 + B군집 3곳을 흩어 두면 B군집이 하한(4)에 못 미치고
+// leftover도 없어 fillToMinimum이 채우지 못한다 — AT4 구제가 실제로 도는 유일한 조합.
+function makeRescueDeps(): { deps: PipelineDeps; categoryCalls: string[] } {
+  const categoryCalls: string[] = [];
+  // Kakao가 전망대(AT4)와 식당(FD6)에 같은 id를 내려주는 복합 시설을 흉내낸다.
+  const collidingPlace = place("구름전망대카페", 34.905, 128.905, "카페");
+
+  const coords: Record<string, [number, number]> = {};
+  for (let i = 0; i < 10; i += 1) coords[`A${i}`] = [33.3 + i * 0.001, 126.3 + i * 0.001];
+  for (let i = 0; i < 3; i += 1) coords[`B${i}`] = [34.9 + i * 0.001, 128.9 + i * 0.001];
+
+  const resolver: PlaceResolver = {
+    async resolve(name) {
+      const c = coords[name];
+      return c ? place(name, c[0], c[1]) : null;
+    },
+    async searchNearby(lat, lng, code) {
+      categoryCalls.push(code);
+      if (code === "AT4") return [collidingPlace];
+      if (code === "FD6") {
+        return [collidingPlace, place(`식당-${lat.toFixed(3)}-${lng.toFixed(3)}`, lat, lng, "맛집")];
+      }
+      return [place(`카페-${lat.toFixed(3)}-${lng.toFixed(3)}`, lat, lng, "카페")];
+    },
+  };
+
+  const deps: PipelineDeps = {
+    resolver,
+    fetchCandidates: async () => [
+      ...Array.from({ length: 10 }, (_, i) => ({ name: `A${i}`, category: "관광" as const })),
+      ...Array.from({ length: 3 }, (_, i) => ({ name: `B${i}`, category: "관광" as const })),
+    ],
+    narrateDay: async () => { throw new Error("설명 생성 실패"); },
+  };
+
+  return { deps, categoryCalls };
+}
+
+const rescueRequest: PlanRequest = {
+  destination: "제주도", days: 3, intensity: "빡빡하게",
+  transportMode: "자차", styles: [], mustVisitPlaces: "", comments: "",
+};
+
 describe("generateItinerary", () => {
   it("요청한 일수만큼 날짜를 만든다", async () => {
     expect((await generateItinerary(deps, request)).planContent).toHaveLength(3);
@@ -43,9 +96,29 @@ describe("generateItinerary", () => {
 
   it("매일 식사가 배치되고 시간순으로 정렬된다", async () => {
     const result = await generateItinerary(deps, request);
+    const mealTitles: string[] = [];
     result.planContent.forEach((day) => {
       expect(day.activities.some((a) => a.isMeal)).toBe(true);
+
+      const minutes = day.activities.map((a) => timeToMinutes(a.time));
+      for (let i = 1; i < minutes.length; i += 1) {
+        expect(minutes[i]).toBeGreaterThanOrEqual(minutes[i - 1]);
+      }
+
+      day.activities.filter((a) => a.isMeal).forEach((a) => mealTitles.push(a.title));
     });
+    expect(new Set(mealTitles).size).toBe(mealTitles.length);
+  });
+
+  it("AT4로 구제된 장소가 다른 날 식당으로 다시 뽑히지 않는다", async () => {
+    const { deps: rescueDeps, categoryCalls } = makeRescueDeps();
+    const result = await generateItinerary(rescueDeps, rescueRequest);
+
+    // 계측: AT4 구제 경로가 실제로 실행됐는지 확인한다. 안 돌았다면 이 테스트는 아무것도 증명하지 못한다.
+    expect(categoryCalls).toContain("AT4");
+
+    const titles = result.planContent.flatMap((d) => d.activities.map((a) => a.title));
+    expect(new Set(titles).size).toBe(titles.length);
   });
 
   it("설명 생성이 모두 실패하면 narrationDegraded를 세우고 최소 설명으로 채운다", async () => {
