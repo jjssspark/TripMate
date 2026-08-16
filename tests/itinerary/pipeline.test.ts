@@ -216,4 +216,76 @@ describe("generateItinerary", () => {
     expect(matches).toHaveLength(1);
     expect(matches[0].mustVisit).toBe(true);
   });
+
+  it("excludeNames에 있는 후보 장소는 최종 일정에서 빠진다", async () => {
+    // 후보 9개 = capacity(3) × days(3). 정확히 꽉 채우는 수라 제외 없이는 leftover 없이
+    // 전부 쓰인다 — "장소0"이 빠지는 게 우연한 leftover가 아니라 필터 때문임을 보장한다.
+    const tightDeps: PipelineDeps = {
+      ...deps,
+      fetchCandidates: async () =>
+        Array.from({ length: 9 }, (_, i) => ({ name: `장소${i}`, category: "관광" as const })),
+    };
+    const excludeRequest: PlanRequest = { ...request, excludeNames: ["장소0"] };
+    const result = await generateItinerary(tightDeps, excludeRequest);
+    const titles = result.planContent.flatMap((d) => d.activities.map((a) => a.title));
+    expect(titles).not.toContain("장소0");
+  });
+
+  // 수정 요청이 "가는 장소는 바꿔줘"라고 해도 식당은 candidate LLM이 아니라 pickMeals가
+  // searchNearby로 직접 고른다 — comments 텍스트 지시는 이 경로에 닿지 않는다.
+  // 클러스터 중심이 이전 실행과 같으면 같은 식당이 사실상 매번 다시 뽑힌다(라이브 확인에서 실제로 발생).
+  it("excludeNames에 있는 식당은 pickMeals에서도 제외된다", async () => {
+    const resolver: PlaceResolver = {
+      async resolve(name) {
+        const i = Number(name.replace("장소", ""));
+        if (Number.isNaN(i)) return null;
+        return place(name, 33.3 + i * 0.05, 126.3 + i * 0.05);
+      },
+      // 실제 카카오처럼 클러스터 중심 반경 안 식당은 늘 같은 상호명 하나만 돌려준다.
+      async searchNearby(lat, lng, code) {
+        return [place("금능이모네", lat, lng, code === "CE7" ? "카페" : "맛집")];
+      },
+    };
+    const excludeMealDeps: PipelineDeps = {
+      resolver,
+      fetchCandidates: async () =>
+        Array.from({ length: 12 }, (_, i) => ({ name: `장소${i}`, category: "관광" as const })),
+      narrateDay: async () => { throw new Error("설명 생성 실패"); },
+    };
+    const excludeMealRequest: PlanRequest = { ...request, excludeNames: ["금능이모네"] };
+
+    const result = await generateItinerary(excludeMealDeps, excludeMealRequest);
+    const titles = result.planContent.flatMap((d) => d.activities.map((a) => a.title));
+    expect(titles).not.toContain("금능이모네");
+  });
+
+  it("같은 이름이 excludeNames와 mustVisitPlaces 양쪽에 있으면 필수 방문지가 이긴다", async () => {
+    const resolver: PlaceResolver = {
+      async resolve(name) {
+        if (name === "성산일출봉") return place("성산일출봉", 33.459, 126.941, "자연");
+        const i = Number(name.replace("장소", ""));
+        if (Number.isNaN(i)) return null;
+        return place(name, 33.3 + i * 0.05, 126.3 + i * 0.05);
+      },
+      async searchNearby(lat, lng, code) {
+        return [place(`식당-${lat.toFixed(3)}-${code}`, lat, lng, code === "CE7" ? "카페" : "맛집")];
+      },
+    };
+    const mustAndExcludeDeps: PipelineDeps = {
+      resolver,
+      fetchCandidates: async () => [
+        { name: "성산일출봉", category: "자연" as const },
+        ...Array.from({ length: 11 }, (_, i) => ({ name: `장소${i}`, category: "관광" as const })),
+      ],
+      narrateDay: async () => { throw new Error("설명 생성 실패"); },
+    };
+    const conflictRequest: PlanRequest = {
+      ...request, mustVisitPlaces: "성산일출봉", excludeNames: ["성산일출봉"],
+    };
+
+    const result = await generateItinerary(mustAndExcludeDeps, conflictRequest);
+    const found = result.planContent.flatMap((d) => d.activities).find((a) => a.title === "성산일출봉");
+    expect(found).toBeDefined();
+    expect(found?.mustVisit).toBe(true);
+  });
 });

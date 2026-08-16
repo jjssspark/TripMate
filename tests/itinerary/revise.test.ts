@@ -18,6 +18,7 @@ describe("mergeFeedbackIntoRequest", () => {
     const result = mergeFeedbackIntoRequest(base, "새로운 곳으로", ["성산일출봉", "한라산"]);
     expect(result.comments).toContain("성산일출봉");
     expect(result.comments).toContain("한라산");
+    expect(result.excludeNames).toEqual(["성산일출봉", "한라산"]);
   });
 
   it("목적지와 일수 같은 기본 조건은 유지한다", () => {

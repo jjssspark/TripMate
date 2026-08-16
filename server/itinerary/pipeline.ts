@@ -13,6 +13,8 @@ export type PlanRequest = {
   styles: string[];
   mustVisitPlaces: string;
   comments: string;
+  /** 다시 추천하지 않을 장소 이름. 수정 요청에서 이전 일정을 넘긴다. */
+  excludeNames?: readonly string[];
 };
 
 export type PipelineDeps = {
@@ -56,6 +58,7 @@ async function pickMeals(
   resolver: PlaceResolver,
   slots: readonly MealSlot[],
   used: Set<string>,
+  excluded: Set<string>,
 ): Promise<Map<MealType, ResolvedPlace>> {
   const out = new Map<MealType, ResolvedPlace>();
   const results = await Promise.allSettled(
@@ -69,7 +72,9 @@ async function pickMeals(
   );
   results.forEach((r, i) => {
     if (r.status !== "fulfilled") return;
-    const pick = r.value.find((p) => !used.has(p.id));
+    const pick = r.value.find(
+      (p) => !used.has(p.id) && !excluded.has(normalizeName(p.name)),
+    );
     if (!pick) return;
     used.add(pick.id);
     out.set(slots[i].mealType, pick);
@@ -82,8 +87,15 @@ export async function generateItinerary(
   request: PlanRequest,
 ): Promise<{ planContent: PlanDay[]; narrationDegraded: boolean }> {
   const mustNames = request.mustVisitPlaces.split(",").map((s) => s.trim()).filter(Boolean);
+  const mustSet = new Set(mustNames.map(normalizeName));
+  // 사용자가 이름을 찍어 요청한 곳은 제외 지시보다 우선한다.
+  const excluded = new Set(
+    (request.excludeNames ?? []).map(normalizeName).filter((n) => !mustSet.has(n)),
+  );
+
   const candidates = await deps.fetchCandidates(request);
-  const places = await resolveAll(deps.resolver, candidates, request.destination, mustNames);
+  const places = (await resolveAll(deps.resolver, candidates, request.destination, mustNames))
+    .filter((p) => !excluded.has(normalizeName(p.name)));
 
   // 모델이 필수 방문지를 빠뜨릴 수 있다. 프롬프트로 부탁하는 대신 직접 확인해 채운다.
   const present = new Set(places.map((p) => normalizeName(p.name)));
@@ -128,7 +140,7 @@ export async function generateItinerary(
     const extras = dedupe(
       rescued
         .flatMap((r) => (r.status === "fulfilled" ? r.value : []))
-        .filter((p) => !usedIds.has(p.id)),
+        .filter((p) => !usedIds.has(p.id) && !excluded.has(normalizeName(p.name))),
     );
     // 구제로 들어온 장소도 집합에 넣어야 뒤에서 식당으로 다시 뽑히지 않는다.
     extras.forEach((p) => usedIds.add(p.id));
@@ -145,7 +157,7 @@ export async function generateItinerary(
     previousTail = ordered.length > 0 ? ordered[ordered.length - 1] : null;
 
     const layout = layoutDay(ordered, request.transportMode, request.intensity);
-    const meals = await pickMeals(deps.resolver, layout.mealSlots, usedIds);
+    const meals = await pickMeals(deps.resolver, layout.mealSlots, usedIds, excluded);
     scheduled.push({ day: index + 1, activities: insertMeals(layout, meals) });
   }
 
