@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { layoutDay, insertMeals, formatTime, hasOverlap } from "../../server/itinerary/schedule";
+import { layoutDay, insertMeals, formatTime, hasOverlap, GENERAL_END_LIMIT } from "../../server/itinerary/schedule";
 import { INTENSITY_RANGE } from "../../server/itinerary/types";
 import type { MealType, PlaceCategory, ResolvedPlace } from "../../server/itinerary/types";
 
@@ -13,6 +13,9 @@ const 근접4곳 = [
 ];
 const 멀리떨어진8곳 = Array.from({ length: 8 }, (_, i) =>
   place(`p${i}`, 33.2 + i * 0.25, 126.2 + i * 0.25, "자연"));
+// 이동 14분씩. 관광 시간만 보면 5개까지 18시 안에 들어간다.
+const 가까운8곳 = Array.from({ length: 8 }, (_, i) =>
+  place(`q${i}`, 33.2 + i * 0.05, 126.2 + i * 0.05));
 
 const 식당 = (t: MealType) => place(`meal-${t}`, 33.45, 126.94, "맛집");
 const 식사맵 = new Map<MealType, ResolvedPlace>([
@@ -54,15 +57,13 @@ describe("layoutDay", () => {
   });
 
   it("하한보다 먼저 18시에 걸리면 그 지점에서 멈춘다", () => {
-    // 가까이 모여 있어 4개까지는 점심 60분을 끼워도 18시 안에 들어간다. 5개째부터 넘긴다.
-    // 여유롭게(하한 1)로 둬서 멈춘 이유가 하한이 아니라 시간 제한임을 분명히 한다.
-    const 가까운8곳 = Array.from({ length: 8 }, (_, i) =>
-      place(`q${i}`, 33.2 + i * 0.05, 126.2 + i * 0.05));
-    const layout = layoutDay(가까운8곳, "자차", "여유롭게");
-    expect(layout.activities).toHaveLength(4);
-    expect(layout.activities.length).toBeGreaterThan(INTENSITY_RANGE["여유롭게"].min);
+    // 가까이 모여 있어 관광 시간만 보면 5개까지는 18시 안에 들어간다. 6개째부터 넘긴다.
+    // 하한(4)보다 큰 5에서 멈추므로 멈춘 이유가 하한이 아니라 시간 제한임이 드러난다.
+    const layout = layoutDay(가까운8곳, "자차", "빡빡하게");
+    expect(layout.activities).toHaveLength(5);
+    expect(layout.activities.length).toBeGreaterThan(INTENSITY_RANGE["빡빡하게"].min);
     const last = layout.activities[layout.activities.length - 1];
-    expect(last.startMinutes + last.stayMinutes).toBeLessThanOrEqual(1080);
+    expect(last.startMinutes + last.stayMinutes).toBeLessThanOrEqual(GENERAL_END_LIMIT);
   });
 
   it("잘라내더라도 강도 하한 아래로는 줄이지 않는다", () => {
@@ -99,6 +100,7 @@ describe("insertMeals", () => {
   it.each([
     ["멀리떨어진8곳", 멀리떨어진8곳, "대중교통" as const],
     ["근접4곳", 근접4곳, "자차" as const],
+    ["가까운8곳", 가까운8곳, "자차" as const],
   ])("어떤 활동도 다른 활동이 진행 중인 시각에 시작하지 않는다 (%s)", (_name, 장소들, 이동수단) => {
     const acts = insertMeals(layoutDay(장소들, 이동수단, "빡빡하게"), 식사맵);
     expect(hasOverlap(acts)).toBe(false);
@@ -139,17 +141,32 @@ describe("insertMeals", () => {
     expect(dinner.startMinutes).toBe(slot.atMinutes);
   });
 
-  it("최종 일정에서도 저녁이 18:00~19:30 안에 들고 일반 활동은 18시에 끝난다", () => {
-    const 가까운8곳 = Array.from({ length: 8 }, (_, i) =>
-      place(`q${i}`, 33.2 + i * 0.05, 126.2 + i * 0.05));
+  it("최종 일정의 일반 활동은 18시 + 중간에 낀 식사 시간 안에 끝난다", () => {
     const acts = insertMeals(layoutDay(가까운8곳, "자차", "빡빡하게"), 식사맵);
 
     const general = acts.filter((a) => !a.isMeal);
-    const generalEnd = general[general.length - 1].startMinutes + general[general.length - 1].stayMinutes;
-    expect(generalEnd).toBeLessThanOrEqual(1080);
+    const last = general[general.length - 1];
+    const generalEnd = last.startMinutes + last.stayMinutes;
 
+    // 허용치는 실제로 삽입된 식사에서 끌어온다. 첫 활동 이후~마지막 활동 이전에 끼어
+    // 뒤를 미는 식사만 센다. 아침은 첫 활동 전에 끝나므로 아무것도 밀지 않는다.
+    const 낀식사 = acts.filter(
+      (a) => a.isMeal
+        && a.startMinutes > general[0].startMinutes
+        && a.startMinutes < last.startMinutes,
+    );
+    const 허용치 = 낀식사.reduce((sum, a) => sum + a.stayMinutes, 0);
+
+    expect(낀식사.map((a) => a.mealType)).toEqual(["점심"]);
+    expect(generalEnd).toBeLessThanOrEqual(GENERAL_END_LIMIT + 허용치);
+    // 넘어선 몫이 관광이 아니라 식사 때문임을 못박는다 — 관광 시간만 보면 18시 안이다.
+    expect(generalEnd - 허용치).toBeLessThanOrEqual(GENERAL_END_LIMIT);
+  });
+
+  it("최종 일정에서도 저녁이 18:00~19:30 안에 든다", () => {
+    const acts = insertMeals(layoutDay(가까운8곳, "자차", "빡빡하게"), 식사맵);
     const dinner = acts.find((a) => a.mealType === "저녁")!;
-    expect(dinner.startMinutes).toBeGreaterThanOrEqual(1080);
+    expect(dinner.startMinutes).toBeGreaterThanOrEqual(GENERAL_END_LIMIT);
     expect(dinner.startMinutes).toBeLessThanOrEqual(1170);
   });
 
