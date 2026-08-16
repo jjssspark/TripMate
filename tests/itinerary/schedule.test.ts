@@ -91,6 +91,16 @@ describe("insertMeals", () => {
     }
   });
 
+  // 식사 체류는 뒤 활동을 미는 양을 정한다. 어떤 테스트도 이 값을 보지 않으면
+  // 저녁을 90에서 30으로 바꿔도 전부 통과한다.
+  it("식사 체류 시간을 종류별로 고정한다", () => {
+    const acts = insertMeals(layoutDay(근접4곳, "자차", "빡빡하게"), 식사맵);
+    const 체류 = (t: MealType) => acts.find((a) => a.mealType === t)!.stayMinutes;
+    expect(체류("아침")).toBe(45);
+    expect(체류("점심")).toBe(60);
+    expect(체류("저녁")).toBe(90);
+  });
+
   it("조회에 실패한 식사는 건너뛰고 나머지는 유지한다", () => {
     const 일부만 = new Map<MealType, ResolvedPlace>([["점심", 식당("점심")]]);
     expect(insertMeals(layoutDay(근접4곳, "자차", "빡빡하게"), 일부만).filter((a) => a.isMeal)).toHaveLength(1);
