@@ -13,6 +13,7 @@ import dotenv from "dotenv";
 import { runPipeline } from "./itinerary/runner";
 import { attachPhotos, getMockupImage } from "./places/photos";
 import { parsePlanInput } from "./itinerary/entry";
+import { NotEnoughPlacesError } from "./itinerary/pipeline";
 import { mergeFeedbackIntoRequest, excludeNamesFor } from "./itinerary/revise";
 
 dotenv.config();
@@ -193,6 +194,13 @@ app.post("/api/generate-plan", async (req, res) => {
     });
   } catch (err) {
     console.error("[TripMate] 일정 생성 실패:", err);
+    // 장소 부족은 서버 오류가 아니라 조건 문제다. 무엇을 조정하면 되는지 그대로 내려보낸다.
+    if (err instanceof NotEnoughPlacesError) {
+      return res.status(422).json({
+        success: false, data: null,
+        error: { code: "NOT_ENOUGH_PLACES", message: err.message, field: null },
+      });
+    }
     return res.status(500).json({
       success: false, data: null,
       error: { code: "PLAN_GENERATION_FAILED", message: "일정을 만들지 못했습니다. 조건을 조금 바꿔 다시 시도해 주세요.", field: null },
@@ -243,6 +251,12 @@ app.post("/api/revise-plan", async (req, res) => {
     });
   } catch (err) {
     console.error("[TripMate] 일정 수정 실패:", err);
+    if (err instanceof NotEnoughPlacesError) {
+      return res.status(422).json({
+        success: false, data: null,
+        error: { code: "NOT_ENOUGH_PLACES", message: err.message, field: null },
+      });
+    }
     return res.status(500).json({
       success: false, data: null,
       error: { code: "PLAN_REVISION_FAILED", message: "일정을 수정하지 못했습니다. 잠시 후 다시 시도해 주세요.", field: null },

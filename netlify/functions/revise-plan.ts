@@ -2,6 +2,7 @@ import { runPipeline } from "../../server/itinerary/runner";
 import { attachPhotos } from "../../server/places/photos";
 import { parsePlanInput } from "../../server/itinerary/entry";
 import { mergeFeedbackIntoRequest, excludeNamesFor } from "../../server/itinerary/revise";
+import { NotEnoughPlacesError } from "../../server/itinerary/pipeline";
 
 // -------------------------------------------------------------
 // Netlify Function Handler — 수정은 요청 조건에 피드백을 병합해 파이프라인을 다시 실행
@@ -60,6 +61,9 @@ export const handler = async (event: any) => {
     };
   } catch (err) {
     console.error("[TripMate] 일정 수정 실패:", err);
+    if (err instanceof NotEnoughPlacesError) {
+      return fail(422, "NOT_ENOUGH_PLACES", err.message);
+    }
     return fail(500, "PLAN_REVISION_FAILED", "일정을 수정하지 못했습니다. 잠시 후 다시 시도해 주세요.");
   }
 };

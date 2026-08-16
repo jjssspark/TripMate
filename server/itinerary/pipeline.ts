@@ -37,6 +37,26 @@ export type PlanDay = { day: number; theme: string; description: string; activit
 const MEAL_RADIUS_M = 1000;
 
 /**
+ * 후보는 MAX_CANDIDATES(60)에서 잘리므로 기간이 길고 강도가 높으면 통과 조건 자체가 사실상
+ * 불가능해진다(14일 × 4 = 56곳). "조건을 바꿔 보라"는 말로는 무엇을 바꿔야 할지 알 수 없어
+ * 메시지에 조정할 항목을 직접 담는다. 이 메시지는 그대로 사용자에게 나가므로 내부 정보를 넣지 않는다.
+ */
+export class NotEnoughPlacesError extends Error {
+  constructor(
+    readonly found: number,
+    readonly needed: number,
+    intensity: Intensity,
+  ) {
+    const hint =
+      intensity === "빡빡하게"
+        ? "여행 기간을 줄이거나 일정 강도를 '여유롭게'로 낮춰 주세요."
+        : "여행 기간을 줄이거나 다른 지역으로 다시 시도해 주세요.";
+    super(`조건에 맞는 장소를 ${found}곳만 확인했습니다. 이 일정에는 ${needed}곳이 필요합니다. ${hint}`);
+    this.name = "NotEnoughPlacesError";
+  }
+}
+
+/**
  * allSettled는 rejection을 조용히 버린다. 키 쿼터가 소진되면 전 후보가 429로 실패해
  * "검증된 장소가 0곳" 오류만 남고 서버 로그에는 아무 단서도 남지 않는다.
  * 사용자 응답에는 넣지 않고 서버 로그에만 남긴다.
@@ -141,7 +161,7 @@ export async function generateItinerary(
 
   const { min } = INTENSITY_RANGE[request.intensity];
   if (places.length < request.days * min) {
-    throw new Error(`검증된 장소가 ${places.length}곳뿐입니다. 최소 ${request.days * min}곳이 필요합니다.`);
+    throw new NotEnoughPlacesError(places.length, request.days * min, request.intensity);
   }
 
   // 한 여행 안에서 같은 장소를 두 번 쓰지 않기 위한 전역 집합. 식당 선택도 여기를 본다.
