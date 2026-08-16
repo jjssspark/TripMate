@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { layoutDay, insertMeals, formatTime, hasOverlap } from "../../server/itinerary/schedule";
+import { INTENSITY_RANGE } from "../../server/itinerary/types";
 import type { MealType, PlaceCategory, ResolvedPlace } from "../../server/itinerary/types";
 
 const place = (id: string, lat: number, lng: number, category: PlaceCategory = "관광"): ResolvedPlace => ({
@@ -53,11 +54,13 @@ describe("layoutDay", () => {
   });
 
   it("하한보다 먼저 18시에 걸리면 그 지점에서 멈춘다", () => {
-    // 가까이 모여 있어 5개까지는 18시 안에 들어간다. 6개째부터 넘긴다.
+    // 가까이 모여 있어 4개까지는 점심 60분을 끼워도 18시 안에 들어간다. 5개째부터 넘긴다.
+    // 여유롭게(하한 1)로 둬서 멈춘 이유가 하한이 아니라 시간 제한임을 분명히 한다.
     const 가까운8곳 = Array.from({ length: 8 }, (_, i) =>
       place(`q${i}`, 33.2 + i * 0.05, 126.2 + i * 0.05));
-    const layout = layoutDay(가까운8곳, "자차", "빡빡하게");
-    expect(layout.activities).toHaveLength(5);
+    const layout = layoutDay(가까운8곳, "자차", "여유롭게");
+    expect(layout.activities).toHaveLength(4);
+    expect(layout.activities.length).toBeGreaterThan(INTENSITY_RANGE["여유롭게"].min);
     const last = layout.activities[layout.activities.length - 1];
     expect(last.startMinutes + last.stayMinutes).toBeLessThanOrEqual(1080);
   });
@@ -118,6 +121,36 @@ describe("insertMeals", () => {
     expect(afterLunch[0].startMinutes).toBeGreaterThanOrEqual(lunchEnd);
     const movedIdx = 근접4곳.findIndex((p) => p.id === afterLunch[0].place.id);
     expect(afterLunch[0].startMinutes).toBeGreaterThan(before[movedIdx]);
+  });
+
+  // 아래 두 테스트는 layoutDay의 중간 산출물이 아니라 최종적으로 나가는 활동 배열을 본다.
+  // layoutDay만 보면 식사 삽입 뒤에 깨지는 규칙을 놓친다.
+  it("이미 불변식을 만족하는 저녁은 밀지 않는다", () => {
+    const layout = layoutDay(근접4곳, "자차", "빡빡하게");
+    const slot = layout.mealSlots.find((s) => s.mealType === "저녁")!;
+    const acts = insertMeals(layout, 식사맵);
+
+    const general = acts.filter((a) => !a.isMeal);
+    const generalEnd = general[general.length - 1].startMinutes + general[general.length - 1].stayMinutes;
+    const dinner = acts.find((a) => a.mealType === "저녁")!;
+
+    // 마지막 일반 활동이 끝나는 시각이 저녁 슬롯보다 이르다 = 저녁은 밀 이유가 없다
+    expect(generalEnd).toBeLessThanOrEqual(slot.atMinutes);
+    expect(dinner.startMinutes).toBe(slot.atMinutes);
+  });
+
+  it("최종 일정에서도 저녁이 18:00~19:30 안에 들고 일반 활동은 18시에 끝난다", () => {
+    const 가까운8곳 = Array.from({ length: 8 }, (_, i) =>
+      place(`q${i}`, 33.2 + i * 0.05, 126.2 + i * 0.05));
+    const acts = insertMeals(layoutDay(가까운8곳, "자차", "빡빡하게"), 식사맵);
+
+    const general = acts.filter((a) => !a.isMeal);
+    const generalEnd = general[general.length - 1].startMinutes + general[general.length - 1].stayMinutes;
+    expect(generalEnd).toBeLessThanOrEqual(1080);
+
+    const dinner = acts.find((a) => a.mealType === "저녁")!;
+    expect(dinner.startMinutes).toBeGreaterThanOrEqual(1080);
+    expect(dinner.startMinutes).toBeLessThanOrEqual(1170);
   });
 
   it("원본 layout.activities를 변형하지 않는다", () => {

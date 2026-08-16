@@ -39,6 +39,32 @@ function walk(places: readonly ResolvedPlace[], mode: TransportMode): ScheduledA
   return out;
 }
 
+/** 점심 슬롯 시각. 잘라내기 판단과 mealSlots 구성이 같은 값을 써야 한다. */
+function lunchAt(activities: readonly ScheduledActivity[]): { anchor: ScheduledActivity; atMinutes: number } {
+  const triggerIdx = activities.findIndex((a) => a.startMinutes >= LUNCH_TRIGGER);
+  const anchor = activities[Math.max(0, (triggerIdx === -1 ? activities.length : triggerIdx) - 1)];
+  const rawLunch = anchor.startMinutes + anchor.stayMinutes;
+  return { anchor, atMinutes: Math.min(LUNCH_MAX, Math.max(LUNCH_MIN, rawLunch)) };
+}
+
+/**
+ * 점심이 끼면 그 뒤 활동이 전부 밀린다. walk()의 종료 시각만 보고 잘라내기를 멈추면
+ * 최종 일정은 18시를 넘긴다 — 잘라내기가 보장한다고 말한 규칙을 정작 나가는 일정이 어긴다.
+ * 그래서 점심이 만들 지연까지 더한 값으로 판단한다.
+ */
+function projectedGeneralEnd(activities: readonly ScheduledActivity[]): number {
+  const last = activities[activities.length - 1];
+  const end = last.startMinutes + last.stayMinutes;
+
+  const { atMinutes } = lunchAt(activities);
+  const next = activities.find((a) => a.startMinutes >= atMinutes);
+  if (!next) return end; // 점심이 하루 끝에 붙는 날은 일반 활동을 밀지 않는다
+
+  // walk()는 활동을 빈틈없이 이어 붙이므로 이 지연은 마지막 활동까지 그대로 전달된다.
+  const delay = Math.max(0, atMinutes + MEAL_STAY.점심 + next.travelFromPrevMinutes - next.startMinutes);
+  return end + delay;
+}
+
 /**
  * 권역 배정은 클러스터를 정원까지 채우므로 그대로 두면 매일 상한 개수가 된다.
  * 하루가 18시를 넘기면 뒤에서부터 덜어내 이동이 먼 날은 자연히 적어지게 한다.
@@ -54,8 +80,7 @@ export function layoutDay(
   let activities = walk(kept, mode);
 
   while (kept.length > min && activities.length > 0) {
-    const last = activities[activities.length - 1];
-    if (last.startMinutes + last.stayMinutes <= GENERAL_END_LIMIT) break;
+    if (projectedGeneralEnd(activities) <= GENERAL_END_LIMIT) break;
     // 뒤에서부터 덜어내되 필수 방문지는 건너뛴다. 사용자가 이름을 찍어 요청한 곳이다.
     const fromEnd = [...kept].reverse().findIndex((p) => !p.mustVisit);
     if (fromEnd === -1) break; // 남은 게 전부 필수면 더 줄일 수 없다
@@ -68,14 +93,8 @@ export function layoutDay(
   if (activities.length > 0) {
     mealSlots.push({ mealType: "아침", near: activities[0].place, atMinutes: BREAKFAST_AT });
 
-    const triggerIdx = activities.findIndex((a) => a.startMinutes >= LUNCH_TRIGGER);
-    const anchor = activities[Math.max(0, (triggerIdx === -1 ? activities.length : triggerIdx) - 1)];
-    const rawLunch = anchor.startMinutes + anchor.stayMinutes;
-    mealSlots.push({
-      mealType: "점심",
-      near: anchor.place,
-      atMinutes: Math.min(LUNCH_MAX, Math.max(LUNCH_MIN, rawLunch)),
-    });
+    const lunch = lunchAt(activities);
+    mealSlots.push({ mealType: "점심", near: lunch.anchor.place, atMinutes: lunch.atMinutes });
 
     const tail = activities[activities.length - 1];
     const rawDinner = tail.startMinutes + tail.stayMinutes + 15;
@@ -93,13 +112,16 @@ export function layoutDay(
 
 /**
  * 하루 일정의 불변식. 각 활동은 직전 활동이 끝나고 이동 시간이 지난 뒤에 시작해야 한다.
- * 테스트와 구현이 같은 정의를 쓰도록 함수로 둔다.
+ * 검사(hasOverlap)와 교정(pushBackOverlaps)이 이 한 정의만 쓴다. 둘이 갈라지면
+ * 테스트는 통과하는데 일정은 겹치는 상태가 된다.
  */
+function earliestStart(prev: ScheduledActivity, next: ScheduledActivity): number {
+  return prev.startMinutes + prev.stayMinutes + next.travelFromPrevMinutes;
+}
+
 export function hasOverlap(activities: readonly ScheduledActivity[]): boolean {
   for (let i = 1; i < activities.length; i += 1) {
-    const prev = activities[i - 1];
-    const earliest = prev.startMinutes + prev.stayMinutes + activities[i].travelFromPrevMinutes;
-    if (activities[i].startMinutes < earliest) return true;
+    if (activities[i].startMinutes < earliestStart(activities[i - 1], activities[i])) return true;
   }
   return false;
 }
@@ -129,19 +151,16 @@ export function insertMeals(
 
 /**
  * 식사는 anchor 활동의 종료 시각에 꽂히지만 체류가 45~90분이라 뒤 활동과 겹친다.
- * 겹친 만큼 그 뒤 활동을 전부 동일하게 밀어 이동 시간을 보존한다.
+ * 겹친 활동을 필요한 만큼만 뒤로 민다 — 밀린 양을 뒤쪽 전부에 일괄로 더하면
+ * 자기 여유(저녁 슬롯처럼)를 가진 활동까지 이유 없이 늦춰진다.
  * 입력 배열과 원소는 건드리지 않고 새 배열을 만든다.
  */
 function pushBackOverlaps(activities: readonly ScheduledActivity[]): ScheduledActivity[] {
-  const out = activities.map((a) => ({ ...a }));
+  const out = [...activities];
   for (let i = 1; i < out.length; i += 1) {
-    const prev = out[i - 1];
-    const earliest = prev.startMinutes + prev.stayMinutes + out[i].travelFromPrevMinutes;
-    const shift = earliest - out[i].startMinutes;
-    if (shift <= 0) continue;
-    for (let j = i; j < out.length; j += 1) {
-      out[j] = { ...out[j], startMinutes: out[j].startMinutes + shift };
-    }
+    const earliest = earliestStart(out[i - 1], out[i]);
+    if (out[i].startMinutes >= earliest) continue;
+    out[i] = { ...out[i], startMinutes: earliest };
   }
   return out;
 }
