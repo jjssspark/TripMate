@@ -50,6 +50,16 @@ describe("wantsDifferentPlaces", () => {
   ])("장소 변경 의도가 없으면 false다: %s", (feedback) => {
     expect(wantsDifferentPlaces(feedback)).toBe(false);
   });
+
+  // 공백을 지우고 검사하면 단어 경계가 사라져 엉뚱한 문장이 걸린다.
+  // "정말 고마워요" → "정말고마워요"에 말고가 들어간다. 원문 그대로 검사해야 한다.
+  it.each([
+    ["정말 고마워요 이대로 좋아요", "말고"],
+    ["정말 고생하셨어요", "말고"],
+    ["제 외국인 친구도 같이 가요", "제외"],
+  ])("공백을 지우면 생기는 오탐을 잡지 않는다: %s (%s 오탐)", (feedback) => {
+    expect(wantsDifferentPlaces(feedback)).toBe(false);
+  });
 });
 
 describe("excludeNamesFor", () => {

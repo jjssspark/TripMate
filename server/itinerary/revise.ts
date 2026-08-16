@@ -16,8 +16,9 @@ const CHANGE_KEYWORDS = ["다른", "바꿔", "바꾸", "변경", "말고", "새�
  * 사용자가 장소를 바꿔 달라고 한 경우에만 배제한다.
  */
 export function wantsDifferentPlaces(feedback: string): boolean {
-  const normalized = feedback.replace(/\s+/g, "");
-  return CHANGE_KEYWORDS.some((k) => normalized.includes(k));
+  // 원문 그대로 검사한다. 공백을 지우면 단어 경계가 사라져 "정말 고마워요"가 말고로,
+  // "제 외국인"이 제외로 걸린다. 그 오탐 하나가 이전 장소를 전부 다시 금지한다.
+  return CHANGE_KEYWORDS.some((k) => feedback.includes(k));
 }
 
 /** 두 진입점(express·netlify)이 같은 판정을 쓰도록 배제 목록 생성을 여기 둔다. */
