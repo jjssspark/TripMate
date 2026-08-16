@@ -20,8 +20,18 @@ import type { PlanRequest } from "./pipeline";
  */
 const CHANGE_KEYWORDS = [
   "다른", "바꿔", "바꾸", "변경", "말고", "새로운", "빼고", "제외",
-  "교체", "별로예요", "별로네요", "별로였", "마음에 안", "다시 추천", "다시 짜", "다시 만들",
+  "교체", "별로예요", "별로네요", "별로였",
 ] as const;
+
+/**
+ * 여러 낱말로 된 키워드. 사용자가 띄어쓰기를 안 해도 뜻이 같으므로 양쪽 공백을 지우고 대조한다.
+ * 한 낱말 키워드는 원문 그대로 둔다 — 공백을 지우면 단어 경계가 사라져
+ * "정말 고마워요"가 말고로, "제 외국인"이 제외로 걸린다.
+ * 여기 있는 키워드는 낱말 두 개가 붙어 있어야 성립해서 그 오탐이 나지 않는다.
+ */
+const CHANGE_PHRASES = ["마음에 안", "다시 추천", "다시 짜", "다시 만들"] as const;
+
+const withoutSpaces = (text: string) => text.replace(/\s+/g, "");
 
 /**
  * 어떤 피드백에나 이전 장소를 전부 배제하면 마음에 들었던 날의 장소까지 사라지고,
@@ -29,9 +39,11 @@ const CHANGE_KEYWORDS = [
  * 사용자가 장소를 바꿔 달라고 한 경우에만 배제한다.
  */
 export function wantsDifferentPlaces(feedback: string): boolean {
-  // 원문 그대로 검사한다. 공백을 지우면 단어 경계가 사라져 "정말 고마워요"가 말고로,
-  // "제 외국인"이 제외로 걸린다. 그 오탐 하나가 이전 장소를 전부 다시 금지한다.
-  return CHANGE_KEYWORDS.some((k) => feedback.includes(k));
+  // 한 낱말 키워드는 원문 그대로 검사한다. 공백을 지우면 단어 경계가 사라져 "정말 고마워요"가
+  // 말고로, "제 외국인"이 제외로 걸린다. 그 오탐 하나가 이전 장소를 전부 다시 금지한다.
+  if (CHANGE_KEYWORDS.some((k) => feedback.includes(k))) return true;
+  const compact = withoutSpaces(feedback);
+  return CHANGE_PHRASES.some((k) => compact.includes(withoutSpaces(k)));
 }
 
 /** 두 진입점(express·netlify)이 같은 판정을 쓰도록 배제 목록 생성을 여기 둔다. */

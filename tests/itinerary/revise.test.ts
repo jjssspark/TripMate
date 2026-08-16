@@ -87,6 +87,17 @@ describe("wantsDifferentPlaces", () => {
     expect(wantsDifferentPlaces(feedback)).toBe(true);
   });
 
+  // 여러 낱말로 된 키워드는 사용자가 띄어쓰기를 안 해도 같은 뜻이다.
+  // 원문 대조만 하면 "마음에 안 들어요"는 잡히고 "마음에안들어요"는 놓친다.
+  it.each([
+    "마음에안들어요",
+    "다시추천해줘",
+    "다시짜줘",
+    "다시만들어줘",
+  ])("여러 낱말 키워드는 띄어쓰기가 없어도 잡는다: %s", (feedback) => {
+    expect(wantsDifferentPlaces(feedback)).toBe(true);
+  });
+
   // 공백을 지우고 검사하면 단어 경계가 사라져 엉뚱한 문장이 걸린다.
   // "정말 고마워요" → "정말고마워요"에 말고가 들어간다. 원문 그대로 검사해야 한다.
   it.each([
