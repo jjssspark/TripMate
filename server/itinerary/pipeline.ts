@@ -137,11 +137,16 @@ export async function generateItinerary(
         deps.resolver.searchNearby(assigned.centers[i].lat, assigned.centers[i].lng, "AT4", 5000),
       ),
     );
-    const extras = dedupe(
-      rescued
-        .flatMap((r) => (r.status === "fulfilled" ? r.value : []))
-        .filter((p) => !usedIds.has(p.id) && !excluded.has(normalizeName(p.name))),
-    );
+    const rescuedPlaces = rescued
+      .flatMap((r) => (r.status === "fulfilled" ? r.value : []))
+      .filter((p) => !usedIds.has(p.id) && !excluded.has(normalizeName(p.name)));
+    // AT4는 이미 배정된 명소의 부속 POI(다른 id, 같은 이름 또는 수 미터 거리)를 흔히 돌려준다.
+    // 확정 목록과 함께 dedupe해야 걸린다. dedupe는 앞선 원소를 남기므로 places가 밀려나지 않는다.
+    // 필수 방문지 복구분은 id로만 걸러 넣으므로 places 안에도 이름 중복이 남아 있을 수 있다.
+    // slice(places.length) 대신 id로 잘라내야 그런 날에도 extras가 어긋나지 않는다.
+    const confirmedIds = new Set(places.map((p) => p.id));
+    const merged = dedupe([...places, ...rescuedPlaces]);
+    const extras = merged.filter((p) => !confirmedIds.has(p.id));
     // 구제로 들어온 장소도 집합에 넣어야 뒤에서 식당으로 다시 뽑히지 않는다.
     extras.forEach((p) => usedIds.add(p.id));
     assigned = fillToMinimum({ ...assigned, leftover: [...assigned.leftover, ...extras] }, min);

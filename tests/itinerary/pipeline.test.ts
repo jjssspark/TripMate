@@ -121,6 +121,48 @@ describe("generateItinerary", () => {
     expect(new Set(titles).size).toBe(titles.length);
   });
 
+  // 카카오 AT4는 클러스터 중심 반경 5km를 훑으므로 이미 배정된 명소의 부속 POI를
+  // 다른 id로 돌려주는 일이 흔하다. 이름·좌표가 사실상 같으면 같은 날 두 번 나온다.
+  it("AT4로 구제된 장소가 이미 확정된 장소와 이름·좌표가 겹치면 버려진다", async () => {
+    const categoryCalls: string[] = [];
+    const coords: Record<string, [number, number]> = {};
+    for (let i = 0; i < 10; i += 1) coords[`A${i}`] = [33.3 + i * 0.001, 126.3 + i * 0.001];
+    for (let i = 0; i < 3; i += 1) coords[`B${i}`] = [34.9 + i * 0.001, 128.9 + i * 0.001];
+
+    // 이름은 "B0"으로 같고 id는 다르며 B0에서 약 2m 떨어진 부속 POI
+    const 부속POI: ResolvedPlace = {
+      ...place("B0", 34.900018, 128.9, "관광"), id: "B0-부속-주차장",
+    };
+
+    const resolver: PlaceResolver = {
+      async resolve(name) {
+        const c = coords[name];
+        return c ? place(name, c[0], c[1]) : null;
+      },
+      async searchNearby(lat, lng, code) {
+        categoryCalls.push(code);
+        if (code === "AT4") return [부속POI];
+        return [place(`식당-${lat.toFixed(3)}-${lng.toFixed(3)}-${code}`, lat, lng, code === "CE7" ? "카페" : "맛집")];
+      },
+    };
+    const dupDeps: PipelineDeps = {
+      resolver,
+      fetchCandidates: async () => [
+        ...Array.from({ length: 10 }, (_, i) => ({ name: `A${i}`, category: "관광" as const })),
+        ...Array.from({ length: 3 }, (_, i) => ({ name: `B${i}`, category: "관광" as const })),
+      ],
+      narrateDay: async () => { throw new Error("설명 생성 실패"); },
+    };
+
+    const result = await generateItinerary(dupDeps, rescueRequest);
+
+    // 계측: 구제 경로가 실제로 돌았는지 확인한다. 안 돌았다면 이 테스트는 아무것도 증명하지 못한다.
+    expect(categoryCalls).toContain("AT4");
+
+    const titles = result.planContent.flatMap((d) => d.activities.map((a) => a.title));
+    expect(titles.filter((t) => t === "B0")).toHaveLength(1);
+  });
+
   it("설명 생성이 모두 실패하면 narrationDegraded를 세우고 최소 설명으로 채운다", async () => {
     const result = await generateItinerary(deps, request);
     expect(result.narrationDegraded).toBe(true);
