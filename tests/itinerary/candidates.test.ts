@@ -19,6 +19,40 @@ describe("buildCandidatePrompt", () => {
     expect(prompt).toContain("60곳의 이름과 분류만");
   });
 
+  it("예산이 다르면 프롬프트가 달라진다", () => {
+    const base = {
+      destination: "제주도", days: 3, intensity: "여유롭게" as const,
+      styles: [], mustVisitPlaces: "", comments: "",
+    };
+    const 절약 = buildCandidatePrompt({ ...base, budget: "절약형" });
+    const 고급 = buildCandidatePrompt({ ...base, budget: "고급형" });
+    expect(절약).not.toBe(고급);
+    expect(절약).toContain("절약형");
+    expect(고급).toContain("고급형");
+  });
+
+  it("동행자가 다르면 프롬프트가 달라진다", () => {
+    const base = {
+      destination: "제주도", days: 3, intensity: "여유롭게" as const,
+      styles: [], mustVisitPlaces: "", comments: "",
+    };
+    const 가족 = buildCandidatePrompt({ ...base, companion: "가족" });
+    const 혼자 = buildCandidatePrompt({ ...base, companion: "혼자" });
+    expect(가족).not.toBe(혼자);
+    expect(가족).toContain("가족");
+    expect(혼자).toContain("혼자");
+  });
+
+  it("예산·동행자가 없으면 빈 줄이나 undefined를 남기지 않는다", () => {
+    const prompt = buildCandidatePrompt({
+      destination: "제주도", days: 3, intensity: "여유롭게",
+      styles: [], mustVisitPlaces: "", comments: "",
+    });
+    expect(prompt).not.toContain("undefined");
+    expect(prompt).not.toMatch(/^-\s*$/m);
+    expect(prompt).not.toMatch(/\n\n\n/);
+  });
+
   it("설명이 아니라 이름과 분류만 요구한다", () => {
     const input = {
       destination: "제주도", days: 2, intensity: "여유롭게" as const,

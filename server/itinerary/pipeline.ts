@@ -13,6 +13,10 @@ export type PlanRequest = {
   styles: string[];
   mustVisitPlaces: string;
   comments: string;
+  /** 절약형·표준형·고급형 등. 선택 입력이라 없으면 프롬프트에서 빠진다. */
+  budget?: string;
+  /** 혼자·친구·연인·가족 등. 선택 입력. */
+  companion?: string;
   /** 다시 추천하지 않을 장소 이름. 수정 요청에서 이전 일정을 넘긴다. */
   excludeNames?: readonly string[];
 };

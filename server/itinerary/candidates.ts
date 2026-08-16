@@ -18,16 +18,24 @@ export type CandidateInput = {
   styles: string[];
   mustVisitPlaces: string;
   comments: string;
+  budget?: string;
+  companion?: string;
 };
 
 export function buildCandidatePrompt(input: CandidateInput): string {
   const count = candidateCount(input.days, input.intensity);
+  // 값이 없는 줄은 아예 만들지 않는다. 빈 줄이나 "없음"이 프롬프트를 흐린다.
+  const optional = [
+    input.companion ? `- 동행자 유형: ${input.companion}` : null,
+    input.budget ? `- 예산 수준: ${input.budget}` : null,
+  ].filter((line): line is string => line !== null);
+
   return `당신은 한국 국내 여행 전문 가이드입니다.
 ${input.destination} 여행에서 가볼 만한 장소 ${count}곳의 이름과 분류만 알려주세요.
 
 [조건]
 - 선호 스타일: ${input.styles.join(", ") || "제한 없음"}
-- 반드시 포함할 장소: ${input.mustVisitPlaces || "없음"}
+${optional.length > 0 ? `${optional.join("\n")}\n` : ""}- 반드시 포함할 장소: ${input.mustVisitPlaces || "없음"}
 - 추가 요청: ${input.comments || "없음"}
 
 [규칙]

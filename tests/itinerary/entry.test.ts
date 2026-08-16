@@ -87,6 +87,24 @@ describe("parsePlanInput", () => {
     }
   });
 
+  it("예산·동행자를 요청에 담는다", () => {
+    const result = parsePlanInput({ destination: "제주도", budget: "절약형", companion: "가족" });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.request.budget).toBe("절약형");
+      expect(result.value.request.companion).toBe("가족");
+    }
+  });
+
+  it("예산·동행자가 없거나 문자열이 아니면 필드 자체를 넣지 않는다", () => {
+    const result = parsePlanInput({ destination: "제주도", budget: 3 });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.request.budget).toBeUndefined();
+      expect(result.value.request.companion).toBeUndefined();
+    }
+  });
+
   it("목적지 앞뒤 공백을 잘라낸다", () => {
     const result = parsePlanInput({ destination: "  제주도  " });
     expect(result.ok).toBe(true);

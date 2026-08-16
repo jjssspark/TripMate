@@ -56,6 +56,11 @@ export function parsePlanInput(body: Record<string, unknown>): ParseResult {
         styles: Array.isArray(body.styles) ? (body.styles as string[]) : [],
         mustVisitPlaces: typeof body.mustVisitPlaces === "string" ? body.mustVisitPlaces : "",
         comments: typeof body.comments === "string" ? body.comments : "",
+        // 선택 입력이다. 없으면 필드 자체를 넣지 않아 프롬프트에서도 빠지게 한다.
+        ...(typeof body.budget === "string" && body.budget.trim()
+          ? { budget: body.budget.trim() } : {}),
+        ...(typeof body.companion === "string" && body.companion.trim()
+          ? { companion: body.companion.trim() } : {}),
       },
     },
   };
