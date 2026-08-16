@@ -13,6 +13,7 @@ import { GoogleGenAI, Type } from "@google/genai";
 import dotenv from "dotenv";
 import { runPipeline } from "./itinerary/runner";
 import { attachPhotos } from "./places/photos";
+import { parsePlanInput } from "./itinerary/entry";
 
 dotenv.config();
 
@@ -280,28 +281,20 @@ app.delete("/api/plans/:id", (req, res) => {
 
 // 5. Generate Travel Plan using Gemini (AI 일정 생성)
 app.post("/api/generate-plan", async (req, res) => {
-  const { destination, startDate, endDate, companion, budget, intensity, transportMode, styles, mustVisitPlaces, comments } = req.body;
-
-  if (!destination) {
+  const parsed = parsePlanInput(req.body ?? {});
+  if (parsed.ok === false) {
     return res.status(400).json({
       success: false, data: null,
-      error: { code: "DESTINATION_REQUIRED", message: "목적지를 입력해주세요.", field: "destination" },
+      error: { code: parsed.code, message: parsed.message, field: parsed.field },
     });
   }
 
-  const days = startDate && endDate
-    ? Math.ceil(Math.abs(new Date(endDate).getTime() - new Date(startDate).getTime()) / 86_400_000) + 1
-    : 3;
+  const { request, days } = parsed.value;
+  const destination = request.destination;
+  const { startDate, endDate, companion, budget, intensity, transportMode, styles, mustVisitPlaces } = req.body;
 
   try {
-    const { planContent, narrationDegraded } = await runPipeline({
-      destination, days,
-      intensity: intensity === "빡빡하게" ? "빡빡하게" : "여유롭게",
-      transportMode: transportMode === "도보" ? "도보" : transportMode === "자차" ? "자차" : "대중교통",
-      styles: Array.isArray(styles) ? styles : [],
-      mustVisitPlaces: mustVisitPlaces || "",
-      comments: comments || "",
-    });
+    const { planContent, narrationDegraded } = await runPipeline(request);
 
     return res.json({
       title: `${destination} ${days - 1}박 ${days}일 여행`,

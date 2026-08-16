@@ -187,4 +187,33 @@ describe("generateItinerary", () => {
     expect(found).toBeDefined();
     expect(found?.mustVisit).toBe(true);
   });
+
+  it("서로 다른 필수 방문지 이름 두 개가 같은 카카오 POI로 풀려도 활동은 하나만 남는다", async () => {
+    const 공용장소 = place("성산일출봉", 33.459, 126.941, "자연");
+    const resolver: PlaceResolver = {
+      // "성산일출봉"과 "성산일출봉(유네스코)" 둘 다 같은 id의 POI로 풀린다 — 이름은 달라도 실체가 같다.
+      async resolve(name) {
+        if (name === "성산일출봉" || name === "성산일출봉(유네스코)") return 공용장소;
+        const i = Number(name.replace("장소", ""));
+        if (Number.isNaN(i)) return null;
+        return place(name, 33.3 + i * 0.05, 126.3 + i * 0.05);
+      },
+      async searchNearby(lat, lng, code) {
+        return [place(`식당-${lat.toFixed(3)}-${code}`, lat, lng, code === "CE7" ? "카페" : "맛집")];
+      },
+    };
+    const collideDeps: PipelineDeps = {
+      resolver,
+      // 후보 목록에 둘 다 없다 — 둘 다 복구 경로를 거친다.
+      fetchCandidates: async () =>
+        Array.from({ length: 12 }, (_, i) => ({ name: `장소${i}`, category: "관광" as const })),
+      narrateDay: async () => { throw new Error("설명 생성 실패"); },
+    };
+    const collideRequest: PlanRequest = { ...request, mustVisitPlaces: "성산일출봉,성산일출봉(유네스코)" };
+
+    const result = await generateItinerary(collideDeps, collideRequest);
+    const matches = result.planContent.flatMap((d) => d.activities).filter((a) => a.title === "성산일출봉");
+    expect(matches).toHaveLength(1);
+    expect(matches[0].mustVisit).toBe(true);
+  });
 });

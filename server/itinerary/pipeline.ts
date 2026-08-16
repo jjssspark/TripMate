@@ -92,9 +92,15 @@ export async function generateItinerary(
     const recovered = await Promise.allSettled(
       missing.map((n) => deps.resolver.resolve(n, request.destination)),
     );
-    const found = recovered
-      .flatMap((r) => (r.status === "fulfilled" && r.value ? [r.value] : []))
-      .map((p) => ({ ...p, mustVisit: true }));
+    // 이름은 다른 필수 방문지 두 개가 같은 카카오 POI로 풀리기도 한다. id로 한 번 더 거른다.
+    const knownIds = new Set(places.map((p) => p.id));
+    const found: ResolvedPlace[] = [];
+    for (const r of recovered) {
+      if (r.status !== "fulfilled" || !r.value) continue;
+      if (knownIds.has(r.value.id)) continue;
+      knownIds.add(r.value.id);
+      found.push({ ...r.value, mustVisit: true });
+    }
     if (found.length > 0) places.unshift(...found);
   }
 

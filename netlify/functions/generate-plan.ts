@@ -1,5 +1,6 @@
 import { runPipeline } from "../../server/itinerary/runner";
 import { attachPhotos } from "../../server/places/photos";
+import { parsePlanInput } from "../../server/itinerary/entry";
 
 const headers = {
   "Access-Control-Allow-Origin": "*",
@@ -23,22 +24,15 @@ export const handler = async (event: any) => {
     return fail(400, "INVALID_JSON", "요청 형식이 올바르지 않습니다.");
   }
 
-  const { destination, startDate, endDate, companion, budget, intensity, transportMode, styles, mustVisitPlaces, comments } = body;
-  if (!destination) return fail(400, "DESTINATION_REQUIRED", "목적지를 입력해주세요.", "destination");
+  const parsed = parsePlanInput(body ?? {});
+  if (parsed.ok === false) return fail(400, parsed.code, parsed.message, parsed.field);
 
-  const days = startDate && endDate
-    ? Math.ceil(Math.abs(new Date(endDate).getTime() - new Date(startDate).getTime()) / 86_400_000) + 1
-    : 3;
+  const { request, days } = parsed.value;
+  const destination = request.destination;
+  const { startDate, endDate, companion, budget, intensity, transportMode, styles, mustVisitPlaces } = body;
 
   try {
-    const { planContent, narrationDegraded } = await runPipeline({
-      destination, days,
-      intensity: intensity === "빡빡하게" ? "빡빡하게" : "여유롭게",
-      transportMode: transportMode === "도보" ? "도보" : transportMode === "자차" ? "자차" : "대중교통",
-      styles: Array.isArray(styles) ? styles : [],
-      mustVisitPlaces: mustVisitPlaces || "",
-      comments: comments || "",
-    });
+    const { planContent, narrationDegraded } = await runPipeline(request);
 
     return {
       statusCode: 200, headers,

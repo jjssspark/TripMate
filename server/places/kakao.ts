@@ -28,8 +28,9 @@ export function matchesRequest(requested: string, returned: string): boolean {
 }
 
 // 카카오는 명소를 검색하면 그 주차장도 함께 준다. 이름이 비슷해 matchesRequest를 통과하므로
-// 코드로 먼저 걸러낸다. PK6 주차장, AD5 숙박은 일정에 넣을 대상이 아니다.
-const EXCLUDED_CODES = ["PK6", "AD5"];
+// 코드로 먼저 걸러낸다. resolve는 필수 방문지 복구 경로도 겸하므로 숙박(AD5)은 제외하지
+// 않는다 — 사용자가 이름으로 찍은 한옥스테이·고택을 걸러내면 그 복구 로직이 무의미해진다.
+const EXCLUDED_CODES = ["PK6"];
 
 const CODE_MAP: Record<string, PlaceCategory> = {
   FD6: "맛집", CE7: "카페", AT4: "관광", CT1: "문화", MT1: "쇼핑",
