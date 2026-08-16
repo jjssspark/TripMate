@@ -1,18 +1,19 @@
 import { Type, type GoogleGenAI } from "@google/genai";
 import { formatTime } from "./schedule";
+import { normalizeName } from "./routing";
 import type { ScheduledDay } from "./types";
 
 export type NarratedActivity = { title: string; description: string; tags: string[] };
 export type NarratedDay = { theme: string; description: string; activities: NarratedActivity[] };
 
-const REGION = /(\S+시|\S+군|\S+구)/;
+const REGION = /\S+[시군구](?=\s|$)/g;
 
 /** 4단계가 실패했을 때. 지어내지 않고 이미 확보한 실제 데이터만 쓴다. */
 export function minimalNarration(day: ScheduledDay, destination: string): NarratedDay {
   const regions = [
     ...new Set(
       day.activities
-        .map((a) => a.place.address.match(REGION)?.[1])
+        .map((a) => a.place.address.match(REGION)?.at(-1))
         .filter((r): r is string => Boolean(r)),
     ),
   ];
@@ -37,10 +38,11 @@ const NARRATE_SCHEMA = {
       items: {
         type: Type.OBJECT,
         properties: {
+          title: { type: Type.STRING, description: "주어진 목록의 장소 이름을 그대로 옮겨 적는다" },
           description: { type: Type.STRING, description: "2~3문장, 120자 이내. 그곳에서 뭘 하면 좋은지 실용 정보 위주" },
           tags: { type: Type.ARRAY, items: { type: Type.STRING }, description: "해시태그 2~3개" },
         },
-        required: ["description", "tags"],
+        required: ["title", "description", "tags"],
       },
     },
   },
@@ -65,7 +67,8 @@ ${list}
 
 각 활동에 대해 여행 가이드북 톤의 존댓말 설명을 2~3문장, 120자 이내로 써주세요.
 미사여구보다 그곳에서 뭘 하면 좋은지, 뭘 먹으면 좋은지 같은 실용 정보를 넣으세요.
-activities 배열은 위 순서와 개수를 정확히 지켜주세요.`,
+activities 배열은 위 순서와 개수를 정확히 지켜주세요.
+각 항목의 title에는 위 목록의 장소 이름을 그대로 옮겨 적으세요.`,
     config: {
       systemInstruction: "당신은 항상 정확한 JSON만 출력하는 여행 도우미입니다. 한국어로 응답하세요.",
       responseMimeType: "application/json",
@@ -77,19 +80,39 @@ activities 배열은 위 순서와 개수를 정확히 지켜주세요.`,
   const text = response.text;
   if (!text) throw new Error(`${day.day}일차 설명 응답이 비었습니다.`);
 
-  const parsed = JSON.parse(text.trim()) as {
-    theme: string; description: string; activities: Array<{ description: string; tags?: string[] }>;
-  };
-  if (parsed.activities.length !== day.activities.length) {
-    throw new Error(`${day.day}일차 설명 개수 불일치: ${parsed.activities.length} vs ${day.activities.length}`);
+  let parsed;
+  try {
+    parsed = JSON.parse(text.trim()) as {
+      theme: string;
+      description: string;
+      activities: Array<{ title?: string; description?: string; tags?: string[] }>;
+    };
+  } catch {
+    throw new Error(`${day.day}일차 설명 응답이 JSON이 아닙니다.`);
   }
+
+  if (!Array.isArray(parsed.activities) || parsed.activities.length !== day.activities.length) {
+    throw new Error(`${day.day}일차 설명 개수 불일치: ${parsed.activities?.length} vs ${day.activities.length}`);
+  }
+
+  // 설명을 인덱스로 갖다 붙이므로 순서가 어긋나면 A 장소에 B 설명이 조용히 달린다.
+  // 이름을 되돌려받아 대조한다. 어긋나면 던지고, 호출부가 minimalNarration으로 내린다.
+  day.activities.forEach((a, i) => {
+    const got = parsed.activities[i];
+    if (!got || typeof got.description !== "string" || got.description.trim() === "") {
+      throw new Error(`${day.day}일차 ${i + 1}번째 설명이 비었습니다.`);
+    }
+    if (normalizeName(got.title ?? "") !== normalizeName(a.place.name)) {
+      throw new Error(`${day.day}일차 ${i + 1}번째 설명이 다른 장소의 것입니다.`);
+    }
+  });
 
   return {
     theme: parsed.theme,
     description: parsed.description,
     activities: day.activities.map((a, i) => ({
       title: a.place.name,
-      description: parsed.activities[i].description,
+      description: parsed.activities[i].description as string,
       tags: parsed.activities[i].tags ?? [],
     })),
   };
