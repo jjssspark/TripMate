@@ -27,6 +27,10 @@ export function matchesRequest(requested: string, returned: string): boolean {
   return a.includes(b) || b.includes(a);
 }
 
+// 카카오는 명소를 검색하면 그 주차장도 함께 준다. 이름이 비슷해 matchesRequest를 통과하므로
+// 코드로 먼저 걸러낸다. PK6 주차장, AD5 숙박은 일정에 넣을 대상이 아니다.
+const EXCLUDED_CODES = ["PK6", "AD5"];
+
 const CODE_MAP: Record<string, PlaceCategory> = {
   FD6: "맛집", CE7: "카페", AT4: "관광", CT1: "문화", MT1: "쇼핑",
 };
@@ -75,7 +79,8 @@ export function createKakaoResolver(apiKey: string, fetchImpl: typeof fetch = fe
       if (isGenericName(name)) return null;
       const query = encodeURIComponent(`${destination} ${name}`);
       const docs = await call(`${BASE}/keyword.json?query=${query}&size=5`);
-      const hit = docs.find((d) => matchesRequest(name, d.place_name));
+      const usable = docs.filter((d) => !EXCLUDED_CODES.includes(d.category_group_code));
+      const hit = usable.find((d) => matchesRequest(name, d.place_name));
       return hit ? toPlace(hit) : null;
     },
 
@@ -83,7 +88,7 @@ export function createKakaoResolver(apiKey: string, fetchImpl: typeof fetch = fe
       const docs = await call(
         `${BASE}/category.json?category_group_code=${categoryCode}&x=${lng}&y=${lat}&radius=${radiusMeters}&size=15`,
       );
-      return docs.map(toPlace);
+      return docs.filter((d) => !EXCLUDED_CODES.includes(d.category_group_code)).map(toPlace);
     },
   };
 }

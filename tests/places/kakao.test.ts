@@ -110,6 +110,30 @@ describe("createKakaoResolver", () => {
     }
   });
 
+  it("주차장(PK6)이 먼저 와도 걸러내고 실제 명소를 찾는다", async () => {
+    const payload = {
+      documents: [
+        {
+          id: "999", place_name: "성산일출봉 주차장", category_group_code: "PK6",
+          category_name: "교통,수송 > 주차장",
+          x: "126.94100", y: "33.45950",
+          road_address_name: "", address_name: "제주특별자치도 서귀포시 성산읍 성산리 79",
+          place_url: "http://place.map.kakao.com/999",
+        },
+        {
+          id: "10332413", place_name: "성산일출봉", category_group_code: "",
+          category_name: "여행 > 관광,명소 > 자연명소 > 산",
+          x: "126.94054", y: "33.45913",
+          road_address_name: "", address_name: "제주특별자치도 서귀포시 성산읍 성산리 78",
+          place_url: "http://place.map.kakao.com/10332413",
+        },
+      ],
+    };
+    const resolver = createKakaoResolver("key", fakeFetch(payload));
+    const result = await resolver.resolve("성산일출봉", "제주도");
+    expect(result).toMatchObject({ id: "10332413", name: "성산일출봉" });
+  });
+
   it("searchNearby는 카테고리 검색 응답을 ResolvedPlace[]로 매핑하고, 카테고리 코드를 요청 URL에 싣는다", async () => {
     const calls: FetchCall[] = [];
     const payload = {
