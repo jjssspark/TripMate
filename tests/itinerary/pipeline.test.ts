@@ -206,9 +206,14 @@ describe("generateItinerary", () => {
       { ...request, intensity: "빡빡하게" },
     ).catch((e) => e);
     expect(빡빡).toBeInstanceOf(NotEnoughPlacesError);
+
     // 강도를 낮출 여지가 있는 요청에서만 강도를 언급한다.
-    expect(빡빡.message).toContain("여유롭게");
-    expect(여유.message).not.toContain("여유롭게로");
+    // 이미 여유롭게인 사용자에게 "여유롭게로 낮추세요"라고 하면 안 된다.
+    expect(빡빡.message).toContain("강도");
+    expect(빡빡.message).toContain("'여유롭게'로");
+    expect(여유.message).not.toContain("강도");
+    expect(여유.message).not.toContain("여유롭게");
+    expect(여유.message).toContain("기간");
   });
 
   it("모델이 후보 목록에서 빠뜨린 필수 방문지를 직접 조회해 채운다", async () => {
