@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { layoutDay, insertMeals, formatTime, hasOverlap, GENERAL_END_LIMIT } from "../../server/itinerary/schedule";
+import { travelMinutes } from "../../server/itinerary/geo";
 import { INTENSITY_RANGE } from "../../server/itinerary/types";
 import type { MealType, PlaceCategory, ResolvedPlace } from "../../server/itinerary/types";
 
@@ -104,6 +105,18 @@ describe("insertMeals", () => {
   ])("어떤 활동도 다른 활동이 진행 중인 시각에 시작하지 않는다 (%s)", (_name, 장소들, 이동수단) => {
     const acts = insertMeals(layoutDay(장소들, 이동수단, "빡빡하게"), 식사맵);
     expect(hasOverlap(acts)).toBe(false);
+
+    // hasOverlap은 production의 earliestStart를 그대로 쓴다. 그 정의가 틀려도
+    // 검사와 교정이 같이 틀리므로 위 단언만으로는 아무것도 못 잡는다.
+    // 여기서는 기대 간격을 좌표에서 직접 다시 계산해 독립적인 판정을 만든다.
+    const general = acts.filter((a) => !a.isMeal);
+    expect(general.length).toBeGreaterThan(1);
+    for (let i = 1; i < general.length; i += 1) {
+      const prev = general[i - 1];
+      const cur = general[i];
+      const 이동 = travelMinutes(prev.place, cur.place, 이동수단);
+      expect(cur.startMinutes - prev.startMinutes).toBeGreaterThanOrEqual(prev.stayMinutes + 이동);
+    }
   });
 
   it("점심 뒤 활동을 삭제하지 않고 뒤로 민다", () => {
