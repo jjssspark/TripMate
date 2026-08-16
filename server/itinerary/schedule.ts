@@ -56,7 +56,11 @@ export function layoutDay(
   while (kept.length > min && activities.length > 0) {
     const last = activities[activities.length - 1];
     if (last.startMinutes + last.stayMinutes <= GENERAL_END_LIMIT) break;
-    kept = kept.slice(0, -1);
+    // 뒤에서부터 덜어내되 필수 방문지는 건너뛴다. 사용자가 이름을 찍어 요청한 곳이다.
+    const fromEnd = [...kept].reverse().findIndex((p) => !p.mustVisit);
+    if (fromEnd === -1) break; // 남은 게 전부 필수면 더 줄일 수 없다
+    const removeAt = kept.length - 1 - fromEnd;
+    kept = [...kept.slice(0, removeAt), ...kept.slice(removeAt + 1)];
     activities = walk(kept, mode);
   }
 

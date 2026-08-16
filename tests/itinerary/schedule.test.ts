@@ -65,6 +65,16 @@ describe("layoutDay", () => {
   it("잘라내더라도 강도 하한 아래로는 줄이지 않는다", () => {
     expect(layoutDay(멀리떨어진8곳, "대중교통", "빡빡하게").activities.length).toBeGreaterThanOrEqual(4);
   });
+
+  it("뒤에서부터 덜어낼 때 필수 방문지는 건너뛴다", () => {
+    // p7이 맨 뒤에 와서 평소라면 가장 먼저 잘려나간다. 필수 방문지로 표시하면 살아남아야 한다.
+    const 장소들 = 멀리떨어진8곳.map((p, i) => (i === 7 ? { ...p, mustVisit: true } : p));
+    const layout = layoutDay(장소들, "대중교통", "빡빡하게");
+    const ids = layout.activities.map((a) => a.place.id);
+    expect(ids).toContain("p7");
+    expect(ids).not.toContain("p6");
+    expect(layout.activities.length).toBeGreaterThanOrEqual(4);
+  });
 });
 
 describe("insertMeals", () => {

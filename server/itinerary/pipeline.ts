@@ -1,4 +1,4 @@
-import { assignToDays, dedupe, fillToMinimum, orderDays, orderWithinDay } from "./routing";
+import { assignToDays, dedupe, fillToMinimum, normalizeName, orderDays, orderWithinDay } from "./routing";
 import { formatTime, insertMeals, layoutDay, type MealSlot } from "./schedule";
 import { minimalNarration, type NarratedDay } from "./narrate";
 import { INTENSITY_RANGE } from "./types";
@@ -39,10 +39,11 @@ async function resolveAll(
   const settled = await Promise.allSettled(
     candidates.map((c) => resolver.resolve(c.name, destination)),
   );
+  const mustSet = new Set(mustNames.map(normalizeName));
   const resolved = settled
     .map((s, i) =>
       s.status === "fulfilled" && s.value
-        ? { ...s.value, mustVisit: mustNames.includes(candidates[i].name) }
+        ? { ...s.value, mustVisit: mustSet.has(normalizeName(candidates[i].name)) }
         : null,
     )
     .filter((p): p is ResolvedPlace => p !== null);
@@ -83,6 +84,19 @@ export async function generateItinerary(
   const mustNames = request.mustVisitPlaces.split(",").map((s) => s.trim()).filter(Boolean);
   const candidates = await deps.fetchCandidates(request);
   const places = await resolveAll(deps.resolver, candidates, request.destination, mustNames);
+
+  // 모델이 필수 방문지를 빠뜨릴 수 있다. 프롬프트로 부탁하는 대신 직접 확인해 채운다.
+  const present = new Set(places.map((p) => normalizeName(p.name)));
+  const missing = mustNames.filter((n) => !present.has(normalizeName(n)));
+  if (missing.length > 0) {
+    const recovered = await Promise.allSettled(
+      missing.map((n) => deps.resolver.resolve(n, request.destination)),
+    );
+    const found = recovered
+      .flatMap((r) => (r.status === "fulfilled" && r.value ? [r.value] : []))
+      .map((p) => ({ ...p, mustVisit: true }));
+    if (found.length > 0) places.unshift(...found);
+  }
 
   const { min } = INTENSITY_RANGE[request.intensity];
   if (places.length < request.days * min) {

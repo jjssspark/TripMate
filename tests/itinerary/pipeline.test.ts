@@ -131,4 +131,60 @@ describe("generateItinerary", () => {
     const 빈리졸버: PlaceResolver = { async resolve() { return null; }, async searchNearby() { return []; } };
     await expect(generateItinerary({ ...deps, resolver: 빈리졸버 }, request)).rejects.toThrow(/장소/);
   });
+
+  it("모델이 후보 목록에서 빠뜨린 필수 방문지를 직접 조회해 채운다", async () => {
+    const resolver: PlaceResolver = {
+      async resolve(name) {
+        if (name === "성산일출봉") return place("성산일출봉", 33.459, 126.941, "자연");
+        const i = Number(name.replace("장소", ""));
+        if (Number.isNaN(i)) return null;
+        return place(name, 33.3 + i * 0.05, 126.3 + i * 0.05);
+      },
+      async searchNearby(lat, lng, code) {
+        return [place(`식당-${lat.toFixed(3)}-${code}`, lat, lng, code === "CE7" ? "카페" : "맛집")];
+      },
+    };
+    const mustDeps: PipelineDeps = {
+      resolver,
+      // 후보 목록에 성산일출봉이 없다 — 모델이 프롬프트 지시를 무시한 상황을 흉내낸다.
+      fetchCandidates: async () =>
+        Array.from({ length: 12 }, (_, i) => ({ name: `장소${i}`, category: "관광" as const })),
+      narrateDay: async () => { throw new Error("설명 생성 실패"); },
+    };
+    const mustRequest: PlanRequest = { ...request, mustVisitPlaces: "성산일출봉" };
+
+    const result = await generateItinerary(mustDeps, mustRequest);
+    const found = result.planContent.flatMap((d) => d.activities).find((a) => a.title === "성산일출봉");
+    expect(found).toBeDefined();
+    expect(found?.mustVisit).toBe(true);
+  });
+
+  it("필수 방문지 이름에 공백 차이가 있어도 mustVisit로 인식한다", async () => {
+    const resolver: PlaceResolver = {
+      async resolve(name) {
+        if (name === "성산 일출봉") return place("성산 일출봉", 33.459, 126.941, "자연");
+        const i = Number(name.replace("장소", ""));
+        if (Number.isNaN(i)) return null;
+        return place(name, 33.3 + i * 0.05, 126.3 + i * 0.05);
+      },
+      async searchNearby(lat, lng, code) {
+        return [place(`식당-${lat.toFixed(3)}-${code}`, lat, lng, code === "CE7" ? "카페" : "맛집")];
+      },
+    };
+    const spacedDeps: PipelineDeps = {
+      resolver,
+      // 모델이 "성산일출봉"을 "성산 일출봉"으로 띄어 냈다 — 사용자 입력과 정확히 일치하지 않는다.
+      fetchCandidates: async () => [
+        { name: "성산 일출봉", category: "자연" as const },
+        ...Array.from({ length: 11 }, (_, i) => ({ name: `장소${i}`, category: "관광" as const })),
+      ],
+      narrateDay: async () => { throw new Error("설명 생성 실패"); },
+    };
+    const spacedRequest: PlanRequest = { ...request, mustVisitPlaces: "성산일출봉" };
+
+    const result = await generateItinerary(spacedDeps, spacedRequest);
+    const found = result.planContent.flatMap((d) => d.activities).find((a) => a.title === "성산 일출봉");
+    expect(found).toBeDefined();
+    expect(found?.mustVisit).toBe(true);
+  });
 });
