@@ -44,7 +44,11 @@ export const CANDIDATE_SCHEMA = {
     type: Type.OBJECT,
     properties: {
       name: { type: Type.STRING, description: "실제 존재하는 장소의 고유 명칭" },
-      category: { type: Type.STRING, description: "관광, 자연, 문화, 쇼핑, 액티비티 중 하나" },
+      category: {
+        type: Type.STRING,
+        enum: ["관광", "자연", "문화", "쇼핑", "액티비티"],
+        description: "관광, 자연, 문화, 쇼핑, 액티비티 중 하나",
+      },
     },
     required: ["name", "category"],
   },
@@ -67,8 +71,17 @@ export async function fetchCandidates(ai: GoogleGenAI, input: CandidateInput): P
   const text = response.text;
   if (!text) throw new Error("후보 추출 응답이 비었습니다.");
 
-  const parsed = JSON.parse(text.trim()) as Array<{ name?: string; category?: string }>;
-  return parsed
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text.trim());
+  } catch {
+    throw new Error("후보 추출 응답이 JSON이 아닙니다.");
+  }
+  if (!Array.isArray(parsed)) {
+    throw new Error("후보 추출 응답이 배열이 아닙니다.");
+  }
+
+  return (parsed as Array<{ name?: string; category?: string }>)
     .filter((c): c is { name: string; category?: string } => Boolean(c.name))
     .map((c) => ({
       name: c.name,

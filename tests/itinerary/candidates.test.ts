@@ -16,15 +16,16 @@ describe("buildCandidatePrompt", () => {
       styles: ["맛집", "자연"], mustVisitPlaces: "성산일출봉, 한라산", comments: "",
     });
     expect(prompt).toContain("성산일출봉, 한라산");
-    expect(prompt).toContain("60");
+    expect(prompt).toContain("60곳의 이름과 분류만");
   });
 
-  it("설명문을 요구하지 않는다", () => {
-    const prompt = buildCandidatePrompt({
-      destination: "제주도", days: 2, intensity: "여유롭게",
+  it("설명이 아니라 이름과 분류만 요구한다", () => {
+    const input = {
+      destination: "제주도", days: 2, intensity: "여유롭게" as const,
       styles: [], mustVisitPlaces: "", comments: "",
-    });
-    expect(prompt).not.toContain("설명을 써");
+    };
+    const prompt = buildCandidatePrompt(input);
     expect(prompt).toContain("이름과 분류만");
+    expect(prompt).toContain("시간, 좌표, 부연을 붙이지 마세요");
   });
 });
