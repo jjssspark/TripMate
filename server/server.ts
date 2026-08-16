@@ -9,11 +9,11 @@ import https from "https";
 import path from "path";
 import fs from "fs";
 import { createServer as createViteServer } from "vite";
-import { GoogleGenAI, Type } from "@google/genai";
 import dotenv from "dotenv";
 import { runPipeline } from "./itinerary/runner";
 import { attachPhotos } from "./places/photos";
 import { parsePlanInput } from "./itinerary/entry";
+import { mergeFeedbackIntoRequest } from "./itinerary/revise";
 
 dotenv.config();
 
@@ -64,68 +64,9 @@ function writePlans(plans: any[]) {
 }
 
 // -------------------------------------------------------------
-// Gemini AI API Utility
-// -------------------------------------------------------------
-let ai: GoogleGenAI | null = null;
-const apiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
-
-if (apiKey && apiKey !== "" && apiKey.trim() !== "") {
-  try {
-    ai = new GoogleGenAI({
-      apiKey: apiKey,
-      httpOptions: {
-        headers: {
-          "User-Agent": "aistudio-build",
-        },
-      },
-    });
-    console.log("Gemini AI initialized on server side successfully.");
-  } catch (err) {
-    console.error("Failed to initialize GoogleGenAI:", err);
-  }
-} else {
-  console.warn("GEMINI_API_KEY is not configured or using placeholder. Running in fallback mode.");
-}
-
-// -------------------------------------------------------------
 // Google Places 실사진 조회 (서버 전용 키 — 클라이언트에는 절대 노출하지 않음)
 // -------------------------------------------------------------
 const googlePlacesApiKey = process.env.GOOGLE_PLACES_API_KEY || "";
-
-function fetchJsonHttps(url: string): Promise<any> {
-  return new Promise((resolve, reject) => {
-    https.get(url, (res) => {
-      let data = "";
-      res.on("data", (chunk) => (data += chunk));
-      res.on("end", () => {
-        try {
-          resolve(JSON.parse(data));
-        } catch (err) {
-          reject(err);
-        }
-      });
-    }).on("error", reject);
-  });
-}
-
-// 장소명 + 목적지로 Google Places를 검색해 실제 사진의 photo_reference를 찾는다.
-// 키가 없거나 검색 결과가 없으면 null을 반환해 호출부가 목업 이미지로 폴백하도록 한다.
-async function fetchRealPlacePhotoRef(placeName: string, destination: string): Promise<string | null> {
-  if (!googlePlacesApiKey) return null;
-
-  try {
-    const query = `${destination} ${placeName}`;
-    const url = `https://maps.googleapis.com/maps/api/place/findplacefromtext/json?input=${encodeURIComponent(
-      query
-    )}&inputtype=textquery&fields=photos&key=${googlePlacesApiKey}`;
-    const data = await fetchJsonHttps(url);
-    const photoRef = data?.candidates?.[0]?.photos?.[0]?.photo_reference;
-    return photoRef || null;
-  } catch (err) {
-    console.error(`Google Places photo lookup failed for "${placeName}":`, err);
-    return null;
-  }
-}
 
 // Helper to choose corresponding high-quality mockup images for places
 function getMockupImage(category: string, destination: string, index: number): string {
@@ -321,132 +262,50 @@ app.post("/api/generate-plan", async (req, res) => {
 });
 
 // -------------------------------------------------------------
-// 5.4 자연어 피드백 기반 일정 재생성 — 기존 planContent + 사용자 피드백을 Gemini에 보내 수정
+// 5.4 자연어 피드백 기반 일정 재생성 — 수정은 요청 조건에 피드백을 병합해 파이프라인을 다시 실행
 // -------------------------------------------------------------
 app.post("/api/revise-plan", async (req, res) => {
-  const { destination, budget, companion, planContent, feedback } = req.body;
+  const { planContent, feedback } = req.body;
 
-  if (!destination || !Array.isArray(planContent) || !feedback) {
-    return res.status(400).json({ success: false, message: "destination, planContent, feedback가 모두 필요합니다." });
-  }
-
-  if (!ai) {
-    return res.json({ success: false, message: "AI 서버가 설정되지 않아 피드백을 반영할 수 없습니다." });
-  }
-
-  const prompt = `당신은 세계적인 여행 가이드이자 전문 AI 여행 컨시어지입니다.
-아래는 사용자가 이미 만들어 둔 여행 일정입니다. 사용자의 피드백을 반영해 이 일정을 자연스럽게 수정해주세요.
-
-[기존 여행 일정 (JSON)]
-${JSON.stringify(planContent)}
-
-[여행 기본 정보]
-- 목적지: ${destination}
-- 예산 수준: ${budget || "표준형"}
-- 동행자 유형: ${companion || "혼자"}
-
-[사용자 피드백]
-"${feedback}"
-
-[수정 지침]
-1. 사용자 피드백과 직접 관련 없는 부분(테마, 시간대, 필수 방문 장소 등)은 최대한 그대로 유지하세요.
-2. 피드백이 특정 스타일(예: "맛집 위주로 바꿔줘", "좀 더 여유롭게 해줘")을 요청하면 관련 활동들을 그 방향에 맞게 교체하거나 조정하세요.
-3. 각 Day의 activities 배열 구조(아침/점심/저녁 식사 3개 포함)는 기존과 동일하게 유지하세요.
-4. 모든 장소의 title은 실제로 존재하는 구체적인 상호명(가게 이름)으로 작성하세요. "현지맛집"처럼 일반명사로 뭉뚱그리지 마세요.
-5. 모든 활동에 대해 실제 위도(latitude)와 경도(longitude) 값을 반드시 포함하세요.
-
-반드시 명시된 JSON 스키마를 준수하여, 수정이 반영된 전체 일정(day별 배열)을 응답해주세요.`;
-
-  const generateRevision = async (modelName: string) => {
-    if (!ai) throw new Error("AI client not initialized");
-    return await ai.models.generateContent({
-      model: modelName,
-      contents: prompt,
-      config: {
-        systemInstruction: "당신은 항상 정확한 JSON 데이터를 출력하는 여행 도우미입니다. 한국어로 응답하세요.",
-        responseMimeType: "application/json",
-        thinkingConfig: { thinkingBudget: 0 },
-        responseSchema: {
-          type: Type.ARRAY,
-          items: {
-            type: Type.OBJECT,
-            properties: {
-              day: { type: Type.INTEGER, description: "여행차수 일 수 (1, 2, 3 등)" },
-              theme: { type: Type.STRING, description: "해당 일차의 흥미진진한 핵심 테마 제목" },
-              description: { type: Type.STRING, description: "해당 일차의 일정 전체 개요 및 감성적 한 줄 요약" },
-              activities: {
-                type: Type.ARRAY,
-                items: {
-                  type: Type.OBJECT,
-                  properties: {
-                    time: { type: Type.STRING, description: "시간대 (예: 오전 09:30, 오후 12:30, 오후 03:00)" },
-                    title: { type: Type.STRING, description: "방문 장소의 실제 상호명(가게 이름)을 구체적으로 기입" },
-                    description: { type: Type.STRING, description: "여행 가이드북 감성의 풍부하고 실용적인 공간 묘사, 매장 팁" },
-                    location: { type: Type.STRING, description: "그 장소의 추천 랜드마크 지역 혹은 도로명" },
-                    category: { type: Type.STRING, description: "활동 유형 (관광, 맛집, 카페, 쇼핑, 숙소, 이동 중 하나를 매칭)" },
-                    isMeal: { type: Type.BOOLEAN, description: "아침/점심/저녁 식사 활동이면 true, 일반 관광/체험 활동이면 false" },
-                    mealType: { type: Type.STRING, description: "식사 활동인 경우 '아침', '점심', '저녁' 중 하나. 식사가 아니면 빈 문자열" },
-                    mustVisit: { type: Type.BOOLEAN, description: "사용자가 필수 지목한 가고싶은 곳인 경우 true, 아니면 false" },
-                    latitude: { type: Type.NUMBER, description: "해당 장소의 위도 좌표 실수형 데이터" },
-                    longitude: { type: Type.NUMBER, description: "해당 장소의 경도 좌표 실수형 데이터" },
-                    tags: {
-                      type: Type.ARRAY,
-                      items: { type: Type.STRING },
-                      description: "연관된 해시태그 목록 2-3개"
-                    }
-                  },
-                  required: ["time", "title", "description", "location", "category", "isMeal", "latitude", "longitude"]
-                }
-              }
-            },
-            required: ["day", "theme", "description", "activities"]
-          }
-        }
-      }
+  if (!Array.isArray(planContent) || typeof feedback !== "string" || !feedback.trim()) {
+    return res.status(400).json({
+      success: false, data: null,
+      error: { code: "REVISE_INPUT_INVALID", message: "planContent, feedback가 모두 필요합니다.", field: null },
     });
-  };
+  }
 
-  const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+  const parsed = parsePlanInput(req.body ?? {});
+  if (parsed.ok === false) {
+    return res.status(400).json({
+      success: false, data: null,
+      error: { code: parsed.code, message: parsed.message, field: parsed.field },
+    });
+  }
+
+  const { request } = parsed.value;
+  const destination = request.destination;
+
+  // 이전 일정에 있던 장소는 제외 지시로 넘겨, 재생성에서 같은 곳이 다시 나오지 않게 한다.
+  const previousNames: string[] = planContent.flatMap((d: any) =>
+    Array.isArray(d.activities) ? d.activities.map((a: any) => a.title) : [],
+  );
 
   try {
-    let response;
-    try {
-      response = await generateRevision("gemini-2.5-flash");
-    } catch (primaryErr: any) {
-      console.warn(`[TripMate AI] revise-plan primary model failed: ${primaryErr.message || primaryErr}`);
-      await sleep(1500);
-      response = await generateRevision("gemini-2.5-flash-lite");
-    }
-
-    const responseText = response.text;
-    if (!responseText) {
-      throw new Error("Empty response text from Gemini API");
-    }
-
-    const revisedDays = JSON.parse(responseText.trim());
-
-    // 기존 generate-plan과 동일하게 실제 장소 사진을 우선 조회하고, 없으면 카테고리 목업 이미지로 대체
-    const enhancedDays = await Promise.all(
-      revisedDays.map(async (dayObj: any) => {
-        if (Array.isArray(dayObj.activities)) {
-          dayObj.activities = await Promise.all(
-            dayObj.activities.map(async (act: any, idx: number) => {
-              const photoRef = await fetchRealPlacePhotoRef(act.title, destination);
-              act.imageUrl = photoRef
-                ? `/api/place-photo?ref=${encodeURIComponent(photoRef)}`
-                : getMockupImage(act.category, destination, idx);
-              return act;
-            })
-          );
-        }
-        return dayObj;
-      })
+    const { planContent: revised, narrationDegraded } = await runPipeline(
+      mergeFeedbackIntoRequest(request, feedback, previousNames),
     );
 
-    return res.json({ success: true, planContent: enhancedDays });
+    return res.json({
+      success: true,
+      planContent: await attachPhotos(revised, destination),
+      narrationDegraded,
+    });
   } catch (err) {
-    console.error("Gemini revise-plan failed:", err);
-    return res.json({ success: false, message: "AI가 피드백을 반영하는 데 실패했습니다. 잠시 후 다시 시도해 주세요." });
+    console.error("[TripMate] 일정 수정 실패:", err);
+    return res.status(500).json({
+      success: false, data: null,
+      error: { code: "PLAN_REVISION_FAILED", message: "일정을 수정하지 못했습니다. 잠시 후 다시 시도해 주세요.", field: null },
+    });
   }
 });
 

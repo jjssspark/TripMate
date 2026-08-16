@@ -306,8 +306,14 @@ export default function PlanResultView({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           destination: plan.destination,
+          startDate: plan.startDate,
+          endDate: plan.endDate,
           budget: plan.budget,
           companion: plan.companion,
+          intensity: plan.intensity,
+          transportMode: plan.transportMode,
+          styles: plan.styles,
+          mustVisitPlaces: plan.mustVisitPlaces,
           planContent: plan.planContent,
           feedback: text,
         }),
@@ -328,7 +334,7 @@ export default function PlanResultView({
       } else {
         setFeedbackMessages((prev) => [
           ...prev,
-          { role: "ai", text: data.message || "일정을 수정하지 못했어요. 다시 시도해주세요." },
+          { role: "ai", text: data.error?.message || "일정을 수정하지 못했어요. 다시 시도해주세요." },
         ]);
       }
     } catch (err) {
