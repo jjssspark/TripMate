@@ -53,13 +53,31 @@ describe("runWithinBudget", () => {
     expect(result.planContent[0].activities[0].description).not.toBe("");
   });
 
-  it("남은 예산이 조금 있으면 그만큼만 기다리고 넘기지 않는다", async () => {
-    // 예산 2000ms, 여유분 1000ms를 뺀 약 1000ms만 설명에 준다. 설명은 1500ms 걸린다.
-    const started = Date.now();
-    const result = await runWithinBudget(depsWithSlowNarration(1_500), request, 2_000);
+  it("남은 예산이 조금 있으면 그만큼만 기다리고 총 예산은 넘기지 않는다", async () => {
+    // 벽시계로 재지 않는다. 끝나지 않는 설명을 주고 "설명을 기다리지 않고 끝났는가"로 판정한다.
+    // 예산 2000ms에서 여유분 1000ms를 뺀 약 1000ms 뒤에 설명 쪽 타임아웃이 먼저 터져야 한다.
+    // 설명 타임아웃이 남은 예산을 무시하면(고정 10초) 바깥 2000ms 예산이 먼저 터져 throw 한다.
+    let calls = 0;
+    let completed = 0;
+    const deps: PipelineDeps = {
+      resolver,
+      fetchCandidates: async () =>
+        Array.from({ length: 12 }, (_, i) => ({ name: `장소${i}`, category: "관광" as const })),
+      narrateDay: async () => {
+        calls += 1;
+        // 영원히 resolve되지 않는다. 타이머가 없어 이벤트 루프를 붙잡지도 않는다.
+        const never = await new Promise<never>(() => {});
+        completed += 1;
+        return never;
+      },
+    };
 
+    const result = await runWithinBudget(deps, request, 2_000);
+
+    expect(calls).toBe(3); // 예산이 남아 있어 설명을 실제로 호출은 했다
+    expect(completed).toBe(0); // 그런데 끝나기를 기다리지는 않았다
     expect(result.narrationDegraded).toBe(true);
-    expect(Date.now() - started).toBeLessThan(2_000);
+    expect(result.planContent).toHaveLength(3);
   });
 
   it("예산이 넉넉하면 설명을 그대로 쓴다", async () => {
