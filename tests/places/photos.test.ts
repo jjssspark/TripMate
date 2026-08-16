@@ -84,13 +84,39 @@ describe("getMockupImage", () => {
     expect(getMockupImage("분류불가", "알수없는곳", 5)).toBe(기타); // 폴백은 인덱스와 무관
   });
 
-  it("항상 https URL을 돌려준다", () => {
-    const 케이스 = [
-      getMockupImage("맛집", "제주도", 0),
-      getMockupImage("관광", "도쿄", 1),
-      getMockupImage("자연", "파리", 2),
-      getMockupImage("", "", 0),
-    ];
-    케이스.forEach((url) => expect(url.startsWith("https://")).toBe(true));
+  // getMockupImage는 목적지 7분기 + 카테고리 폴백 9분기로 갈라진다. 네 개만 찔러 보면
+  // 나머지 분기 하나가 http://를 돌려줘도 통과한다. 분기마다 대표 입력을 하나씩 둔다.
+  const 모든분기: readonly [string, string, string][] = [
+    ["도쿄 맛집", "맛집", "도쿄"],
+    ["도쿄 일반", "관광", "tokyo"],
+    ["오사카", "관광", "오사카"],
+    ["제주 맛집", "맛집", "제주도"],
+    ["제주 일반", "관광", "jeju"],
+    ["파리", "관광", "파리"],
+    ["시드니", "관광", "sydney"],
+    ["폴백 맛집", "맛집", "알수없는곳"],
+    ["폴백 카페", "카페", "알수없는곳"],
+    ["폴백 쇼핑", "쇼핑", "알수없는곳"],
+    ["폴백 숙소", "호텔", "알수없는곳"],
+    ["폴백 관광", "명소", "알수없는곳"],
+    ["폴백 자연", "바다", "알수없는곳"],
+    ["폴백 액티비티", "체험", "알수없는곳"],
+    ["폴백 문화", "박물관", "알수없는곳"],
+    ["폴백 기본", "분류불가", "알수없는곳"],
+  ];
+
+  it.each(모든분기)("모든 분기가 https URL을 돌려준다: %s", (_이름, 카테고리, 목적지) => {
+    expect(getMockupImage(카테고리, 목적지, 0).startsWith("https://")).toBe(true);
+  });
+
+  it("나열한 입력이 서로 다른 분기로 간다", () => {
+    // 분기마다 URL이 다르므로, 전부 다르면 위 목록이 실제로 16개 분기를 밟았다는 뜻이다.
+    // 분기가 늘거나 줄면 여기가 먼저 깨져 목록을 갱신하게 만든다.
+    const urls = 모든분기.map(([, 카테고리, 목적지]) => getMockupImage(카테고리, 목적지, 0));
+    expect(new Set(urls).size).toBe(모든분기.length);
+  });
+
+  it("빈 카테고리·빈 목적지도 https URL로 폴백한다", () => {
+    expect(getMockupImage("", "", 0).startsWith("https://")).toBe(true);
   });
 });
