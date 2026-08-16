@@ -161,16 +161,21 @@ describe("insertMeals", () => {
     const last = general[general.length - 1];
     const generalEnd = last.startMinutes + last.stayMinutes;
 
-    // 허용치는 실제로 삽입된 식사에서 끌어온다. 첫 활동 이후~마지막 활동 이전에 끼어
-    // 뒤를 미는 식사만 센다. 아침은 첫 활동 전에 끝나므로 아무것도 밀지 않는다.
+    // 첫 활동 이후~마지막 활동 이전에 끼어 뒤를 미는 식사만 센다.
+    // 아침은 첫 활동 전에 끝나므로 아무것도 밀지 않는다.
     const 낀식사 = acts.filter(
       (a) => a.isMeal
         && a.startMinutes > general[0].startMinutes
         && a.startMinutes < last.startMinutes,
     );
-    const 허용치 = 낀식사.reduce((sum, a) => sum + a.stayMinutes, 0);
+
+    // 허용치를 낀식사의 실제 체류에서 끌어오면 식사 시간이 틀려도 허용치가 같이 늘어나
+    // 테스트가 통과한다. 기대하는 점심 체류를 여기 못박고 실제 값과 대조한다.
+    const 점심_체류 = 60;
+    const 허용치 = 점심_체류;
 
     expect(낀식사.map((a) => a.mealType)).toEqual(["점심"]);
+    expect(낀식사[0].stayMinutes).toBe(점심_체류);
     expect(generalEnd).toBeLessThanOrEqual(GENERAL_END_LIMIT + 허용치);
     // 넘어선 몫이 관광이 아니라 식사 때문임을 못박는다 — 관광 시간만 보면 18시 안이다.
     expect(generalEnd - 허용치).toBeLessThanOrEqual(GENERAL_END_LIMIT);
