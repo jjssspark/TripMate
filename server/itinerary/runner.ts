@@ -9,7 +9,8 @@ const CANDIDATE_TIMEOUT_MS = 14_000;
 const CANDIDATE_RETRY_TIMEOUT_MS = 5_000;
 const NARRATE_TIMEOUT_MS = 10_000;
 export const TOTAL_BUDGET_MS = 25_000;
-// 설명이 끝난 뒤에도 결과 조립·사진 첨부·직렬화가 남는다. 그만큼은 설명에 주지 않는다.
+// 설명이 끝난 뒤에도 이 예산 안에서 planContent 조립이 남는다. 그만큼은 설명에 주지 않는다.
+// (사진 첨부는 runWithinBudget 바깥에서 도므로 이 예산에 포함되지 않는다.)
 const NARRATE_RESERVE_MS = 1_000;
 
 /**

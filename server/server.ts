@@ -212,8 +212,9 @@ app.post("/api/generate-plan", async (req, res) => {
 // 5.4 자연어 피드백 기반 일정 재생성 — 수정은 요청 조건에 피드백을 병합해 파이프라인을 다시 실행
 // -------------------------------------------------------------
 app.post("/api/revise-plan", async (req, res) => {
-  // Content-Type이 JSON이 아니면 express가 req.body를 채우지 않는다.
-  // 가드 없이 구조 분해하면 TypeError → 미처리 rejection으로 응답이 영영 가지 않는다.
+  // body-parser가 content-type 검사 전에 req.body = req.body || {}를 넣으므로 실제로
+  // undefined가 되지는 않는다. 그래도 아래 parsePlanInput(req.body ?? {})과 형태를 맞춰
+  // 두 진입점이 같은 입력에서 똑같이 400 REVISE_INPUT_INVALID를 내도록 둔다.
   const { planContent, feedback } = req.body ?? {};
 
   if (!Array.isArray(planContent) || typeof feedback !== "string" || !feedback.trim()) {
