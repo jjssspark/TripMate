@@ -457,7 +457,7 @@ export default function App() {
               <PlannerFlow
                 initialDestination={plannerDestination}
                 onPlanGenerated={handlePlanGenerated}
-                onError={(message) => showToast(message, "error")}
+                onError={(message, type) => showToast(message, type ?? "error")}
               />
             )}
 

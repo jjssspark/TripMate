@@ -11,11 +11,16 @@ import { ArrowLeftIcon, ArrowRightIcon, SparklesIcon, EditIcon, LocationIcon, Ca
 import { searchDestinations } from "../lib/destinations";
 import { getRecommendedSpots } from "../lib/recommendedSpots";
 
+// 서버가 준 메시지만 사용자에게 보여준다. 네트워크·파싱 예외의 영문 원문은
+// 사용자에게 의미가 없고 내부 사정을 드러낸다.
+class PlanRequestError extends Error {}
+
 interface PlannerFlowProps {
   /** 홈의 추천 여행지에서 넘어온 경우 목적지를 미리 채운다. */
   initialDestination?: string;
   onPlanGenerated: (plan: TravelPlan) => void;
-  onError: (message: string) => void;
+  /** type을 생략하면 실패("error")로 취급한다. 실패가 아닌 안내(예: 설명 누락)는 "success"로 넘긴다. */
+  onError: (message: string, type?: "success" | "error") => void;
 }
 
 /** 생성 요청을 끊는 상한. 서버 예산(27초)보다 넉넉히 잡아 서버 폴백이 먼저 오게 한다. */
@@ -198,20 +203,22 @@ export default function PlannerFlow({
       console.log(`★ [TripMate AI] API 응답 수신 상태코드: ${response.status} (${response.statusText})`);
 
       if (!response.ok) {
-        throw new Error(`API request failed with status ${response.status}`);
+        const payload = await response.json().catch(() => null);
+        throw new PlanRequestError(payload?.error?.message || "일정 생성에 실패했습니다.");
       }
 
       const plan: TravelPlan = await response.json();
       console.log("★ [TripMate AI] API 응답 파싱 성공. 생성된 일정 데이터:", plan);
-      
+
       // Override default name if customized
       if (tripTitle.trim()) {
         plan.title = tripTitle.trim();
       }
 
-      // 서버가 AI 대신 임시 일정을 돌려준 경우. 조용히 넘기면 사용자는 이게 AI 추천인 줄 안다.
-      if (plan.isFallback) {
-        onError("AI 응답이 늦어 임시 일정을 보여드립니다. 다시 시도하면 실제 추천을 받을 수 있어요.");
+      // 장소와 동선은 확정됐지만 설명 생성이 실패한 경우. 가짜 일정이 아니라 설명만 짧다.
+      // 실패가 아니므로 error 배너가 아니라 success 톤 토스트로 안내한다.
+      if (plan.narrationDegraded) {
+        onError("일정은 만들었지만 설명을 다 쓰지 못했습니다. 다시 시도하면 설명이 채워집니다.", "success");
       }
 
       onPlanGenerated(plan);
@@ -220,7 +227,11 @@ export default function PlannerFlow({
       if (err instanceof DOMException && err.name === "AbortError") {
         onError("일정 생성이 30초를 넘겨 중단했습니다. 조건을 줄이고 다시 시도해 주세요.");
       } else {
-        onError("일정 생성에 실패했습니다. 잠시 후 다시 시도해 주세요.");
+        onError(
+          err instanceof PlanRequestError
+            ? err.message
+            : "일정 생성에 실패했습니다. 잠시 후 다시 시도해 주세요.",
+        );
       }
     } finally {
       clearTimeout(abortTimer);

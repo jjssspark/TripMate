@@ -306,8 +306,14 @@ export default function PlanResultView({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           destination: plan.destination,
+          startDate: plan.startDate,
+          endDate: plan.endDate,
           budget: plan.budget,
           companion: plan.companion,
+          intensity: plan.intensity,
+          transportMode: plan.transportMode,
+          styles: plan.styles,
+          mustVisitPlaces: plan.mustVisitPlaces,
           planContent: plan.planContent,
           feedback: text,
         }),
@@ -315,7 +321,9 @@ export default function PlanResultView({
       const data = await res.json();
 
       if (data.success && Array.isArray(data.planContent)) {
-        const updatedPlan = { ...plan, planContent: data.planContent };
+        // 서버가 준 narrationDegraded를 그대로 반영한다. 안 읽으면 이전 값이 남는다.
+        const degraded = data.narrationDegraded === true;
+        const updatedPlan = { ...plan, planContent: data.planContent, narrationDegraded: degraded };
         setPlan(updatedPlan);
         setFeedbackMessages((prev) => [
           ...prev,
@@ -324,11 +332,17 @@ export default function PlanResultView({
         if (isSavedMode && onUpdatePlan) {
           await onUpdatePlan(updatedPlan);
         }
-        onShowToast?.("일정이 피드백을 반영해 수정되었습니다!", "success");
+        // 설명만 짧아진 것이지 일정은 정상이다. 오류 톤이 아니라 성공 톤으로 안내한다.
+        onShowToast?.(
+          degraded
+            ? "일정은 수정했지만 설명을 다 쓰지 못했습니다. 다시 시도하면 설명이 채워집니다."
+            : "일정이 피드백을 반영해 수정되었습니다!",
+          "success",
+        );
       } else {
         setFeedbackMessages((prev) => [
           ...prev,
-          { role: "ai", text: data.message || "일정을 수정하지 못했어요. 다시 시도해주세요." },
+          { role: "ai", text: data.error?.message || "일정을 수정하지 못했어요. 다시 시도해주세요." },
         ]);
       }
     } catch (err) {
