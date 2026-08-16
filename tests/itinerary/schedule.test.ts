@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { layoutDay, insertMeals, formatTime } from "../../server/itinerary/schedule";
+import { layoutDay, insertMeals, formatTime, hasOverlap } from "../../server/itinerary/schedule";
 import type { MealType, PlaceCategory, ResolvedPlace } from "../../server/itinerary/types";
 
 const place = (id: string, lat: number, lng: number, category: PlaceCategory = "관광"): ResolvedPlace => ({
@@ -91,15 +91,39 @@ describe("insertMeals", () => {
     expect(insertMeals(layoutDay(근접4곳, "자차", "빡빡하게"), 일부만).filter((a) => a.isMeal)).toHaveLength(1);
   });
 
-  it("어떤 활동도 다른 활동이 진행 중인 시각에 시작하지 않는다", () => {
-    // 하한 규칙 때문에 하루가 길어진 날에도 식사가 활동 안에 박히면 안 된다
-    const acts = insertMeals(
-      layoutDay(멀리떨어진8곳, "대중교통", "빡빡하게"),
-      식사맵,
-    );
-    for (let i = 1; i < acts.length; i += 1) {
-      const prev = acts[i - 1];
-      expect(acts[i].startMinutes).toBeGreaterThanOrEqual(prev.startMinutes + prev.stayMinutes);
-    }
+  // 멀리떨어진8곳은 이동이 125분씩이라 점심이 하한으로 클램프돼 우연히 겹치지 않는다.
+  // 근접4곳처럼 이동이 짧은 날이 실제로 겹치는 형태다.
+  it.each([
+    ["멀리떨어진8곳", 멀리떨어진8곳, "대중교통" as const],
+    ["근접4곳", 근접4곳, "자차" as const],
+  ])("어떤 활동도 다른 활동이 진행 중인 시각에 시작하지 않는다 (%s)", (_name, 장소들, 이동수단) => {
+    const acts = insertMeals(layoutDay(장소들, 이동수단, "빡빡하게"), 식사맵);
+    expect(hasOverlap(acts)).toBe(false);
+  });
+
+  it("점심 뒤 활동을 삭제하지 않고 뒤로 민다", () => {
+    const layout = layoutDay(근접4곳, "자차", "빡빡하게");
+    const before = layout.activities.map((a) => a.startMinutes);
+    const acts = insertMeals(layout, 식사맵);
+
+    // 일반 활동이 하나도 사라지지 않았다
+    const general = acts.filter((a) => !a.isMeal);
+    expect(general.map((a) => a.place.id)).toEqual(근접4곳.map((p) => p.id));
+
+    // 점심 뒤 활동이 실제로 뒤로 밀렸다
+    const lunch = acts.find((a) => a.mealType === "점심")!;
+    const lunchEnd = lunch.startMinutes + lunch.stayMinutes;
+    const afterLunch = general.filter((a) => a.startMinutes >= lunch.startMinutes);
+    expect(afterLunch.length).toBeGreaterThan(0);
+    expect(afterLunch[0].startMinutes).toBeGreaterThanOrEqual(lunchEnd);
+    const movedIdx = 근접4곳.findIndex((p) => p.id === afterLunch[0].place.id);
+    expect(afterLunch[0].startMinutes).toBeGreaterThan(before[movedIdx]);
+  });
+
+  it("원본 layout.activities를 변형하지 않는다", () => {
+    const layout = layoutDay(근접4곳, "자차", "빡빡하게");
+    const snapshot = layout.activities.map((a) => a.startMinutes);
+    insertMeals(layout, 식사맵);
+    expect(layout.activities.map((a) => a.startMinutes)).toEqual(snapshot);
   });
 });

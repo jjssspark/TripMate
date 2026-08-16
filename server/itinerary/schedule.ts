@@ -91,6 +91,19 @@ export function layoutDay(
   return { activities, mealSlots };
 }
 
+/**
+ * 하루 일정의 불변식. 각 활동은 직전 활동이 끝나고 이동 시간이 지난 뒤에 시작해야 한다.
+ * 테스트와 구현이 같은 정의를 쓰도록 함수로 둔다.
+ */
+export function hasOverlap(activities: readonly ScheduledActivity[]): boolean {
+  for (let i = 1; i < activities.length; i += 1) {
+    const prev = activities[i - 1];
+    const earliest = prev.startMinutes + prev.stayMinutes + activities[i].travelFromPrevMinutes;
+    if (activities[i].startMinutes < earliest) return true;
+  }
+  return false;
+}
+
 export function insertMeals(
   layout: DayLayout,
   meals: ReadonlyMap<MealType, ResolvedPlace>,
@@ -110,5 +123,25 @@ export function insertMeals(
     })
     .filter((a): a is ScheduledActivity => a !== null);
 
-  return [...layout.activities, ...mealActivities].sort((a, b) => a.startMinutes - b.startMinutes);
+  const sorted = [...layout.activities, ...mealActivities].sort((a, b) => a.startMinutes - b.startMinutes);
+  return pushBackOverlaps(sorted);
+}
+
+/**
+ * 식사는 anchor 활동의 종료 시각에 꽂히지만 체류가 45~90분이라 뒤 활동과 겹친다.
+ * 겹친 만큼 그 뒤 활동을 전부 동일하게 밀어 이동 시간을 보존한다.
+ * 입력 배열과 원소는 건드리지 않고 새 배열을 만든다.
+ */
+function pushBackOverlaps(activities: readonly ScheduledActivity[]): ScheduledActivity[] {
+  const out = activities.map((a) => ({ ...a }));
+  for (let i = 1; i < out.length; i += 1) {
+    const prev = out[i - 1];
+    const earliest = prev.startMinutes + prev.stayMinutes + out[i].travelFromPrevMinutes;
+    const shift = earliest - out[i].startMinutes;
+    if (shift <= 0) continue;
+    for (let j = i; j < out.length; j += 1) {
+      out[j] = { ...out[j], startMinutes: out[j].startMinutes + shift };
+    }
+  }
+  return out;
 }
