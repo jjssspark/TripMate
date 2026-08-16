@@ -45,8 +45,8 @@ export interface TravelPlan {
   createdAt: string;
   updatedAt: string;
   isShared?: boolean;
-  /** AI 생성에 실패해 서버가 임시 목업 일정을 돌려준 경우 true */
-  isFallback?: boolean;
+  /** 장소·동선·시간은 검증됐지만 설명 문구 생성에 실패한 경우 true. 일정 자체는 진짜다. */
+  narrationDegraded?: boolean;
 }
 
 export interface UserSession {

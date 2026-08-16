@@ -198,20 +198,21 @@ export default function PlannerFlow({
       console.log(`★ [TripMate AI] API 응답 수신 상태코드: ${response.status} (${response.statusText})`);
 
       if (!response.ok) {
-        throw new Error(`API request failed with status ${response.status}`);
+        const payload = await response.json().catch(() => null);
+        throw new Error(payload?.error?.message || "일정 생성에 실패했습니다.");
       }
 
       const plan: TravelPlan = await response.json();
       console.log("★ [TripMate AI] API 응답 파싱 성공. 생성된 일정 데이터:", plan);
-      
+
       // Override default name if customized
       if (tripTitle.trim()) {
         plan.title = tripTitle.trim();
       }
 
-      // 서버가 AI 대신 임시 일정을 돌려준 경우. 조용히 넘기면 사용자는 이게 AI 추천인 줄 안다.
-      if (plan.isFallback) {
-        onError("AI 응답이 늦어 임시 일정을 보여드립니다. 다시 시도하면 실제 추천을 받을 수 있어요.");
+      // 장소와 동선은 확정됐지만 설명 생성이 실패한 경우. 가짜 일정이 아니라 설명만 짧다.
+      if (plan.narrationDegraded) {
+        onError("일정은 만들었지만 설명을 다 쓰지 못했습니다. 다시 시도하면 설명이 채워집니다.");
       }
 
       onPlanGenerated(plan);
@@ -220,7 +221,7 @@ export default function PlannerFlow({
       if (err instanceof DOMException && err.name === "AbortError") {
         onError("일정 생성이 30초를 넘겨 중단했습니다. 조건을 줄이고 다시 시도해 주세요.");
       } else {
-        onError("일정 생성에 실패했습니다. 잠시 후 다시 시도해 주세요.");
+        onError(err instanceof Error ? err.message : "일정 생성에 실패했습니다. 잠시 후 다시 시도해 주세요.");
       }
     } finally {
       clearTimeout(abortTimer);
