@@ -43,9 +43,23 @@ describe("wantsDifferentPlaces", () => {
   });
 
   it.each([
+    "1일차 장소를 교체해줘",
+    "다시 추천해줘",
+    "카페 위주로 다시 짜줘",
+    "처음부터 다시 만들어줘",
+    "마음에 안 들어요",
+    "여기 별로예요",
+  ])("바꿔 달라는 뜻의 일상적인 표현도 잡는다: %s", (feedback) => {
+    expect(wantsDifferentPlaces(feedback)).toBe(true);
+  });
+
+  it.each([
     "2일차를 좀 더 여유롭게 해줘",
     "설명을 자세히 써줘",
     "이동 시간이 궁금해요",
+    // 맨 "다시"를 키워드로 넣으면 여기서 오탐이 난다. 특정 형태만 넣는 이유다.
+    "다시 저장해줘",
+    "지도를 다시 보여줘",
     "",
   ])("장소 변경 의도가 없으면 false다: %s", (feedback) => {
     expect(wantsDifferentPlaces(feedback)).toBe(false);
