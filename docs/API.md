@@ -113,6 +113,23 @@ Kakao 검증을 통과한 실재 장소가 일정을 채우기에 모자란 경�
 
 Gemini 무료 티어는 모델·프로젝트당 하루 20회입니다. 일정 1건에 2회를 쓰므로 하루 약 10건이 상한입니다. 조건을 바꿔도 풀리지 않고 기다리는 것 외에 방법이 없으므로 500과 분리했습니다. 재시도 시각은 태평양시 자정 리셋을 한국시간으로 환산해 계산합니다(서머타임에 따라 16시/17시).
 
+**Response 503 — 서버 설정 미완료**
+
+```ts
+{ success: false, data: null,
+  error: { code: "SERVICE_NOT_CONFIGURED",
+           message: "서비스가 아직 설정되지 않았습니다. 관리자에게 문의해 주세요.",
+           field: null } }
+```
+
+`GEMINI_API_KEY`(또는 `VITE_GEMINI_API_KEY`)나 `KAKAO_REST_API_KEY`가 배포 환경에 없을 때입니다. 사용자가 재시도해도 절대 풀리지 않으므로 500과 분리했습니다. 어떤 키가 비었는지는 응답에 담지 않고 서버 로그에만 남깁니다.
+
+```
+[TripMate] 필수 환경변수 누락: KAKAO_REST_API_KEY
+```
+
+> 이 코드는 TS-031에서 나왔습니다. 배포 환경에 Kakao 키가 없어 운영이 하루 넘게 죽어 있었는데, 500 메시지가 "잠시 후 다시 시도해 주세요"라 일시적 장애로 오인하고 4분간 재시도했습니다. 설정 문제와 일시적 장애는 사용자가 할 수 있는 일이 다르므로 상태 코드로 갈랐습니다.
+
 **Response 500**
 
 ```ts
@@ -260,9 +277,10 @@ Google Places Photo API를 대신 호출해 실제 이미지 바이너리를 프
 |---|---|---|
 | 에러 응답 모양이 엔드포인트마다 다름 | 일정 생성·수정은 `{success,data,error}` 봉투를 쓰지만 `/api/plans`·`geocode`는 `{error:"..."}`, `place-photo`는 순수 텍스트 | 전 엔드포인트 통일 |
 | 일부 엔드포인트에 에러 코드 없음 | `/api/plans`·`geocode`는 사람이 읽는 메시지만 존재 | `USER_EMAIL_INVALID` 같은 코드 |
-| `geocode` 500이 예외 메시지를 그대로 반환 | `netlify/functions/geocode.ts:111`이 `err.message`를 응답에 실음 | 내부 정보 대신 `traceId`만 노출 |
 | `place-photo`는 JSON이 아님 | 이미지 바이너리 직접 반환 | — (이 경우는 의도된 예외로 봄) |
 
-**정리된 부분**: 일정 생성·수정 경로는 `{success, data, error}` 봉투와 `DESTINATION_REQUIRED`·`NOT_ENOUGH_PLACES`·`AI_QUOTA_EXCEEDED` 같은 SCREAMING_SNAKE_CASE 코드를 씁니다. AI 실패를 200으로 감싸던 방식도 제거해 상태 코드로 드러냅니다(위 "변경" 참고).
+**정리된 부분**: 일정 생성·수정 경로는 `{success, data, error}` 봉투와 `DESTINATION_REQUIRED`·`NOT_ENOUGH_PLACES`·`AI_QUOTA_EXCEEDED`·`SERVICE_NOT_CONFIGURED` 같은 SCREAMING_SNAKE_CASE 코드를 씁니다. AI 실패를 200으로 감싸던 방식도 제거해 상태 코드로 드러냅니다(위 "변경" 참고).
+
+`geocode` 500이 `err.message`를 그대로 반환하던 것도 고쳤습니다(2026-08-17). 예외 메시지에는 내부 URL·경로가 실리므로 로그에만 남기고 응답에는 고정 문구를 씁니다. 로컬 Express 판(`server/server.ts`)에도 같은 누출이 있어 함께 고쳤습니다.
 
 **남은 편차**는 `/api/plans` CRUD, `geocode`, `place-photo`입니다. 로컬 개발 전용이거나 부가 기능이라 아직 손대지 않았습니다. 의도된 설계가 아니라 정리되지 않은 부분입니다.

@@ -15,6 +15,7 @@ import { attachPhotos, getMockupImage } from "./places/photos";
 import { parsePlanInput } from "./itinerary/entry";
 import { NotEnoughPlacesError } from "./itinerary/pipeline";
 import { QuotaExceededError } from "./itinerary/quota";
+import { ConfigMissingError } from "./itinerary/config";
 import { mergeFeedbackIntoRequest, excludeNamesFor } from "./itinerary/revise";
 
 dotenv.config();
@@ -209,6 +210,14 @@ app.post("/api/generate-plan", async (req, res) => {
         error: { code: "AI_QUOTA_EXCEEDED", message: err.message, field: null },
       });
     }
+    // 설정 누락은 재시도로 풀리지 않는다. 500으로 뭉개면 "잠시 후 다시" 안내가 나가 헛되이 기다리게 된다.
+    if (err instanceof ConfigMissingError) {
+      console.error("[TripMate] 필수 환경변수 누락:", err.missing.join(", "));
+      return res.status(503).json({
+        success: false, data: null,
+        error: { code: "SERVICE_NOT_CONFIGURED", message: err.message, field: null },
+      });
+    }
     return res.status(500).json({
       success: false, data: null,
       error: { code: "PLAN_GENERATION_FAILED", message: "일정을 만들지 못했습니다. 조건을 조금 바꿔 다시 시도해 주세요.", field: null },
@@ -271,6 +280,14 @@ app.post("/api/revise-plan", async (req, res) => {
       return res.status(429).json({
         success: false, data: null,
         error: { code: "AI_QUOTA_EXCEEDED", message: err.message, field: null },
+      });
+    }
+    // 설정 누락은 재시도로 풀리지 않는다. 500으로 뭉개면 "잠시 후 다시" 안내가 나가 헛되이 기다리게 된다.
+    if (err instanceof ConfigMissingError) {
+      console.error("[TripMate] 필수 환경변수 누락:", err.missing.join(", "));
+      return res.status(503).json({
+        success: false, data: null,
+        error: { code: "SERVICE_NOT_CONFIGURED", message: err.message, field: null },
       });
     }
     return res.status(500).json({
@@ -385,9 +402,10 @@ app.get("/api/geocode", async (req, res) => {
       return res.json(coord);
     }
     return res.status(404).json({ error: "No location found" });
-  } catch (err: any) {
+  } catch (err) {
+    // 예외 메시지에는 내부 URL·경로가 실린다. 로그에만 남기고 응답에는 넣지 않는다.
     console.error("Server geocoding error:", err);
-    return res.status(500).json({ error: err.message || "Internal server error" });
+    return res.status(500).json({ error: "Internal server error" });
   }
 });
 

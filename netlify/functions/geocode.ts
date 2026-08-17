@@ -105,12 +105,13 @@ export const handler = async (event: any) => {
       headers,
       body: JSON.stringify({ error: "No location found" }),
     };
-  } catch (err: any) {
+  } catch (err) {
+    // 예외 메시지에는 내부 URL·경로가 실린다. 로그에만 남기고 응답에는 넣지 않는다.
     console.error("Geocoding error inside Function:", err);
     return {
       statusCode: 500,
       headers,
-      body: JSON.stringify({ error: err.message || "Internal Server Error" }),
+      body: JSON.stringify({ error: "Internal Server Error" }),
     };
   }
 };

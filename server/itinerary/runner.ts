@@ -4,6 +4,7 @@ import { narrateTrip } from "./narrate";
 import { generateItinerary, type PipelineDeps, type PlanRequest } from "./pipeline";
 import { createKakaoResolver } from "../places/kakao";
 import { isQuotaError, toQuotaError } from "./quota";
+import { requireApiKeys } from "./config";
 import { withTimeout, TimeoutError } from "./timeout";
 
 const CANDIDATE_TIMEOUT_MS = 14_000;
@@ -59,10 +60,7 @@ export async function fetchWithRetry<T>(call: () => Promise<T>): Promise<T> {
 
 // 단계별 예산만으로는 총합이 안 잡힌다. 전체에도 상한을 둬서 클라이언트가 끊기 전에 우리가 끊는다.
 export async function runPipeline(request: PlanRequest) {
-  const geminiKey = process.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
-  if (!geminiKey) throw new Error("GEMINI API 키가 설정되지 않았습니다.");
-  const kakaoKey = process.env.KAKAO_REST_API_KEY;
-  if (!kakaoKey) throw new Error("KAKAO_REST_API_KEY가 설정되지 않았습니다.");
+  const { geminiKey, kakaoKey } = requireApiKeys();
 
   const ai = new GoogleGenAI({
     apiKey: geminiKey,
