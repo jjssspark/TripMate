@@ -65,7 +65,6 @@ TripMate가 실제로 노출하는 엔드포인트의 요청/응답 계약입니
       imageUrl: string;       // Places 실사진 프록시 URL 또는 카테고리별 목업 이미지
     }>;
   }>;
-  // isFallback 필드가 없음 = AI가 실제로 생성한 정상 응답
 }
 ```
 
@@ -259,9 +258,11 @@ Google Places Photo API를 대신 호출해 실제 이미지 바이너리를 프
 
 | 편차 | 실제 동작 | 표준이 요구하는 것 |
 |---|---|---|
-| AI 생성 실패도 HTTP 200 | `isFallback`/`success` 필드로 성공 여부를 판단 | 5xx로 실패를 표현 |
-| 에러 응답 모양이 엔드포인트마다 다름 | `{error}` / `{success,message}` / 순수 텍스트 세 가지 혼재 | 통일된 `error` 객체 |
-| 에러 코드 없음 | 사람이 읽는 한글 메시지만 존재 | `USER_EMAIL_INVALID` 같은 코드 |
+| 에러 응답 모양이 엔드포인트마다 다름 | 일정 생성·수정은 `{success,data,error}` 봉투를 쓰지만 `/api/plans`·`geocode`는 `{error:"..."}`, `place-photo`는 순수 텍스트 | 전 엔드포인트 통일 |
+| 일부 엔드포인트에 에러 코드 없음 | `/api/plans`·`geocode`는 사람이 읽는 메시지만 존재 | `USER_EMAIL_INVALID` 같은 코드 |
+| `geocode` 500이 예외 메시지를 그대로 반환 | `netlify/functions/geocode.ts:111`이 `err.message`를 응답에 실음 | 내부 정보 대신 `traceId`만 노출 |
 | `place-photo`는 JSON이 아님 | 이미지 바이너리 직접 반환 | — (이 경우는 의도된 예외로 봄) |
 
-**AI 실패 시에도 200을 쓰는 이유**는 의도적입니다 — 사용자에게 빈 화면 대신 "지금은 임시 일정을 보여준다"는 걸 화면에서 알려주는 쪽을 택했고(`isFallback` 플래그), HTTP 상태 코드보다 그 판단을 프론트가 명시적으로 하게 만들고 싶었습니다. 나머지(에러 모양 불일치, 에러 코드 부재)는 의도된 설계가 아니라 **정리되지 않은 부분**이며, `tests/` 신설과 함께 다음에 손볼 후보로 남겨둡니다.
+**정리된 부분**: 일정 생성·수정 경로는 `{success, data, error}` 봉투와 `DESTINATION_REQUIRED`·`NOT_ENOUGH_PLACES`·`AI_QUOTA_EXCEEDED` 같은 SCREAMING_SNAKE_CASE 코드를 씁니다. AI 실패를 200으로 감싸던 방식도 제거해 상태 코드로 드러냅니다(위 "변경" 참고).
+
+**남은 편차**는 `/api/plans` CRUD, `geocode`, `place-photo`입니다. 로컬 개발 전용이거나 부가 기능이라 아직 손대지 않았습니다. 의도된 설계가 아니라 정리되지 않은 부분입니다.

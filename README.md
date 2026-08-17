@@ -142,11 +142,16 @@ cp .env.example .env
 | :--- | :--- | :--- | :--- |
 | `VITE_SUPABASE_URL` | 클라이언트 | ✅ | Supabase 프로젝트 URL |
 | `VITE_SUPABASE_ANON_KEY` | 클라이언트 | ✅ | Supabase anon public key (RLS 보호) |
-| `GEMINI_API_KEY` | 서버 전용 | ✅ | AI 일정 생성·수정 |
-| `GOOGLE_PLACES_API_KEY` | 서버 전용 | — | 장소 사진 조회. 없으면 사진 없이 동작 |
+| `GEMINI_API_KEY` | 서버 전용 | ✅ | AI 후보 추출·설명 생성 |
+| `KAKAO_REST_API_KEY` | 서버 전용 | ✅ | 장소 실재 검증·좌표 조회 |
+| `GOOGLE_PLACES_API_KEY` | 서버 전용 | — | 장소 사진 조회. 없으면 카테고리별 목업 이미지를 씁니다 |
 | `PORT` | 서버 전용 | — | 로컬 dev 서버 포트 (기본 3000) |
 
-> `VITE_` 접두사가 붙은 값은 브라우저 번들에 그대로 포함됩니다. Gemini와 Places 키는 접두사 없이 두어 서버에만 남도록 했습니다.
+> `VITE_` 접두사가 붙은 값은 브라우저 번들에 그대로 포함됩니다. Gemini·Kakao·Places 키는 접두사 없이 두어 서버에만 남도록 했습니다.
+
+> `KAKAO_REST_API_KEY`는 선택이 아니라 필수입니다. 파이프라인 2단계(실재 검증)가 이 키로 카카오 로컬 API를 호출하며, 키가 없으면 검증을 통과하는 장소가 0건이 되어 일정 생성 전체가 실패합니다. 배포 환경에도 반드시 등록해야 합니다.
+
+> 코드는 `GEMINI_API_KEY`가 없으면 `VITE_GEMINI_API_KEY`도 읽습니다(`server/itinerary/runner.ts:45`). 배포 플랫폼에 이미 `VITE_` 이름으로 등록해 둔 경우를 위한 호환 경로이며, 이 값은 서버에서만 참조되므로 클라이언트 번들에는 들어가지 않습니다. 새로 설정한다면 접두사 없는 이름을 쓰세요.
 
 ### 4. 로컬 서버 실행
 ```bash

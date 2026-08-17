@@ -37,7 +37,11 @@ Supabase (Auth + PostgreSQL) ◄── 브라우저에서 직접 호출
 
 **왜 이렇게 했는가**: Netlify Functions는 로컬에서 HMR과 함께 돌리기 번거롭습니다. 개발 중에는 Express 한 프로세스로 프론트와 API를 동시에 띄우는 편이 반복 속도가 빠릅니다.
 
-**대가**: 프롬프트와 Gemini 응답 스키마 로직이 양쪽에 중복됩니다. 실제로 이 중복 때문에 "Gemini thinking 모드 비활성화" 수정을 두 번에 나눠 커밋해야 했습니다(`3ea5322` → `efe3255`). 공통 로직을 `shared/`로 추출하는 것이 다음 개선 과제입니다.
+**대가와 그 이후**: 초기에는 프롬프트와 Gemini 응답 스키마 로직이 양쪽에 중복돼 있었습니다. 그 대가로 "Gemini thinking 모드 비활성화" 수정을 두 번에 나눠 커밋해야 했고(`3ea5322` → `efe3255`), 로컬에만 `transportMode`가 반영되지 않아 이동수단 선택이 조용히 무시되던 것도 그때 발견했습니다.
+
+파이프라인을 교체하면서(`eabb669`) 공통 로직을 `server/itinerary/`로 추출했습니다. 지금은 양쪽 모두 `parsePlanInput` → `runPipeline`만 호출하는 얇은 어댑터입니다. `netlify/functions/generate-plan.ts`는 69줄이고, `transportMode` 같은 입력 정규화는 `server/itinerary/entry.ts` 한 곳에서만 일어납니다.
+
+남은 차이는 HTTP 계층뿐입니다. Express는 `req`/`res`를, Netlify는 `Request`/`Response`를 씁니다.
 
 ## API
 
@@ -80,10 +84,16 @@ Supabase (Auth + PostgreSQL) ◄── 브라우저에서 직접 호출
 
 ## 알려진 개선 과제
 
-1. **번들 크기** — `app` 청크가 gzip 164KB입니다. Leaflet과 motion을 동적 import로 분리할 여지가 있습니다.
-2. **서버 로직 중복** — 위 "이중 서버 계층" 참고.
-3. **테스트 커버리지 협소** — `tests/lib/`에 목적지 검색·초성 변환(`destinations.ts`)과 추천 스팟 조회(`recommendedSpots.ts`) 단위 테스트 11개가 있습니다(`npm test`). 일정 생성 응답 파싱, `planDisplay.ts`, API 라우트 핸들러는 아직 대상 밖입니다.
-4. **파일 크기** — `server/server.ts` 845줄, `PlanResultView.tsx` 834줄로 코딩 규약의 800줄 상한을 넘습니다.
-5. **`any` 타입 57곳** — Gemini 응답과 Supabase 반환값의 타입 경계에 몰려 있습니다. 응답 스키마 타입을 정의하면 대부분 제거됩니다.
+> 수치 기준일: 2026-08-17
+
+1. **번들 크기** — `app` 청크가 gzip 209KB입니다. 2026-08-01 관측치(164KB)보다 커졌습니다. 그 사이 초성 검색·지도 연동이 들어간 것을 감안해도 증가 추세이며, Leaflet과 motion을 동적 import로 분리하는 작업이 아직 안 됐습니다.
+2. **파일 크기** — `PlanResultView.tsx` 892줄로 코딩 규약의 800줄 상한을 넘습니다. `server/server.ts`는 파이프라인 추출로 845줄 → 433줄이 되어 해소됐습니다.
+3. **`any` 타입 39곳** — Gemini 응답과 Supabase 반환값의 타입 경계에 몰려 있습니다. 응답 스키마 타입을 정의하면 대부분 제거됩니다.
    그때까지 `eslint.config.js`에서 `@typescript-eslint/no-explicit-any`를 `warn`으로 두고 lint 출력에 계속 노출시켜 추적합니다.
    숫자가 0이 되면 규칙을 `error`로 되돌립니다.
+4. **테스트 범위** — `npm test` 기준 15개 파일 201개 테스트가 통과합니다. 파이프라인 전 단계(후보 추출·존재 검증·날짜 배정·순서 결정·시각 배치·설명·쿼터)와 목적지 검색이 대상입니다. 아직 대상 밖인 것은 React 컴포넌트와 E2E 플로우입니다.
+
+### 해소된 항목
+
+- **서버 로직 중복** — `server/itinerary/`로 추출 완료. 위 "이중 서버 계층" 참고.
+- **`server/server.ts` 800줄 초과** — 433줄로 축소.
