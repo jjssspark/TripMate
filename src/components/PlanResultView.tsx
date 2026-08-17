@@ -24,6 +24,10 @@ interface PlanResultViewProps {
   onShowToast?: (message: string, type: "success" | "error") => void;
 }
 
+// 서버 예산 25초(TOTAL_BUDGET_MS)에 의도 분류·사진 첨부가 더 붙는다. 그보다 여유를 두되
+// 무한정 기다리지는 않는다.
+const REVISE_TIMEOUT_MS = 35_000;
+
 const geocodeCache: { [key: string]: [number, number] } = {};
 
 /** 여행 시작일 기준 N일차의 날짜 라벨. "2026-08-14", 1 → "8.15 (토)" */
@@ -300,8 +304,14 @@ export default function PlanResultView({
     setFeedbackInput("");
     setIsRevising(true);
 
+    // 서버 예산 25초에 의도 분류와 사진 첨부가 더 붙는다. 그보다 넉넉히 잡되,
+    // 응답이 영영 안 와도 입력창이 잠긴 채 남지 않도록 상한을 둔다.
+    const controller = new AbortController();
+    const abortTimer = setTimeout(() => controller.abort(), REVISE_TIMEOUT_MS);
+
     try {
       const res = await fetch("/api/revise-plan", {
+        signal: controller.signal,
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -325,9 +335,18 @@ export default function PlanResultView({
         const degraded = data.narrationDegraded === true;
         const updatedPlan = { ...plan, planContent: data.planContent, narrationDegraded: degraded };
         setPlan(updatedPlan);
+
+        // 서버가 무엇을 실제로 반영했는지 그대로 전한다. 비어 있는데 "수정했다"고 하면
+        // 사용자는 자기 요청이 무시된 걸 알 방법이 없다.
+        const applied: string[] = Array.isArray(data.applied) ? data.applied : [];
         setFeedbackMessages((prev) => [
           ...prev,
-          { role: "ai", text: "요청하신 대로 일정을 수정했어요! 아래 내용을 확인해보세요." },
+          {
+            role: "ai",
+            text: applied.length > 0
+              ? `${applied.join(", ")}을(를) 반영해 일정을 다시 짰어요. 아래 내용을 확인해보세요.`
+              : "그 요청은 아직 일정 조건으로 옮기지 못해서 장소만 다시 골랐어요. 지금 바꿀 수 있는 건 일정 강도(여유롭게·빡빡하게), 이동수단, 취향, 특정 장소 추가·제외예요.",
+          },
         ]);
         if (isSavedMode && onUpdatePlan) {
           await onUpdatePlan(updatedPlan);
@@ -336,7 +355,9 @@ export default function PlanResultView({
         onShowToast?.(
           degraded
             ? "일정은 수정했지만 설명을 다 쓰지 못했습니다. 다시 시도하면 설명이 채워집니다."
-            : "일정이 피드백을 반영해 수정되었습니다!",
+            : applied.length > 0
+              ? "일정이 피드백을 반영해 수정되었습니다!"
+              : "반영할 수 있는 조건을 찾지 못해 장소만 다시 골랐습니다.",
           "success",
         );
       } else {
@@ -347,11 +368,18 @@ export default function PlanResultView({
       }
     } catch (err) {
       console.error("revise-plan request failed:", err);
+      const timedOut = err instanceof DOMException && err.name === "AbortError";
       setFeedbackMessages((prev) => [
         ...prev,
-        { role: "ai", text: "네트워크 오류로 일정을 수정하지 못했어요." },
+        {
+          role: "ai",
+          text: timedOut
+            ? "응답이 너무 오래 걸려 중단했어요. 잠시 후 다시 시도해주세요."
+            : "네트워크 오류로 일정을 수정하지 못했어요.",
+        },
       ]);
     } finally {
+      clearTimeout(abortTimer);
       setIsRevising(false);
     }
   };

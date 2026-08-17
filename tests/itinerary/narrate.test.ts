@@ -78,7 +78,7 @@ function narrated(day: number, title: string) {
 }
 
 function fakeAi(reply: unknown | (() => never)) {
-  const generateContent = vi.fn(async () => {
+  const generateContent = vi.fn(async (_req: { model: string; config: Record<string, unknown> }) => {
     if (typeof reply === "function") (reply as () => never)();
     return { text: typeof reply === "string" ? reply : JSON.stringify(reply) };
   });
@@ -95,6 +95,31 @@ describe("narrateTrip", () => {
 
     // Assert
     expect(generateContent).toHaveBeenCalledTimes(1);
+  });
+
+  // 모델 선택이 두 가지를 좌우한다. flash로는 4일치 배치가 14초 상한을 넘겨 전 일차가 강등됐고
+  // (실측 13,970ms), 무료 한도가 모델별로 잡히므로 후보 추출(flash)과 버킷을 갈라야
+  // 하루 처리량이 10건에서 20건이 된다.
+  it("설명은 후보 추출과 다른 모델을 써서 한도 버킷을 나눈다", async () => {
+    // Arrange
+    const { ai, generateContent } = fakeAi({ days: [narrated(1, "성산일출봉"), narrated(2, "함덕해수욕장")] });
+
+    // Act
+    await narrateTrip(ai, 이틀, "제주도");
+
+    // Assert
+    expect(generateContent.mock.calls[0][0].model).toBe("gemini-2.5-flash-lite");
+  });
+
+  it("thinking을 끄고 호출한다", async () => {
+    // Arrange
+    const { ai, generateContent } = fakeAi({ days: [narrated(1, "성산일출봉"), narrated(2, "함덕해수욕장")] });
+
+    // Act
+    await narrateTrip(ai, 이틀, "제주도");
+
+    // Assert
+    expect(generateContent.mock.calls[0][0].config.thinkingConfig).toEqual({ thinkingBudget: 0 });
   });
 
   it("정상 응답이면 일차 순서대로 설명을 돌려준다", async () => {

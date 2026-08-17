@@ -1,7 +1,6 @@
-import { runPipeline } from "../../server/itinerary/runner";
+import { runRevision } from "../../server/itinerary/runner";
 import { attachPhotos } from "../../server/places/photos";
 import { parsePlanInput } from "../../server/itinerary/entry";
-import { mergeFeedbackIntoRequest, excludeNamesFor } from "../../server/itinerary/revise";
 import { NotEnoughPlacesError } from "../../server/itinerary/pipeline";
 import { QuotaExceededError } from "../../server/itinerary/quota";
 import { ConfigMissingError } from "../../server/itinerary/config";
@@ -49,8 +48,10 @@ export const handler = async (event: any) => {
   );
 
   try {
-    const { planContent: revised, narrationDegraded } = await runPipeline(
-      mergeFeedbackIntoRequest(request, feedback, excludeNamesFor(feedback, previousNames)),
+    const { planContent: revised, narrationDegraded, applied } = await runRevision(
+      request,
+      feedback,
+      previousNames,
     );
 
     return {
@@ -59,6 +60,7 @@ export const handler = async (event: any) => {
         success: true,
         planContent: await attachPhotos(revised, destination),
         narrationDegraded,
+        applied,
       }),
     };
   } catch (err) {

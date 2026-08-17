@@ -10,13 +10,12 @@ import path from "path";
 import fs from "fs";
 import { createServer as createViteServer } from "vite";
 import dotenv from "dotenv";
-import { runPipeline } from "./itinerary/runner";
+import { runPipeline, runRevision } from "./itinerary/runner";
 import { attachPhotos, getMockupImage } from "./places/photos";
 import { parsePlanInput } from "./itinerary/entry";
 import { NotEnoughPlacesError } from "./itinerary/pipeline";
 import { QuotaExceededError } from "./itinerary/quota";
 import { ConfigMissingError } from "./itinerary/config";
-import { mergeFeedbackIntoRequest, excludeNamesFor } from "./itinerary/revise";
 
 dotenv.config();
 
@@ -258,14 +257,17 @@ app.post("/api/revise-plan", async (req, res) => {
   );
 
   try {
-    const { planContent: revised, narrationDegraded } = await runPipeline(
-      mergeFeedbackIntoRequest(request, feedback, excludeNamesFor(feedback, previousNames)),
+    const { planContent: revised, narrationDegraded, applied } = await runRevision(
+      request,
+      feedback,
+      previousNames,
     );
 
     return res.json({
       success: true,
       planContent: await attachPhotos(revised, destination),
       narrationDegraded,
+      applied,
     });
   } catch (err) {
     console.error("[TripMate] 일정 수정 실패:", err);

@@ -1,6 +1,7 @@
 import { assignToDays, dedupe, fillToMinimum, normalizeName, orderDays, orderWithinDay } from "./routing";
 import { formatTime, insertMeals, layoutDay, type MealSlot } from "./schedule";
 import { minimalNarration, type NarratedDay } from "./narrate";
+import { createTrace } from "./trace";
 import { INTENSITY_RANGE } from "./types";
 import type { Candidate, Coord, Intensity, MealType, ResolvedPlace, ScheduledDay, TransportMode } from "./types";
 import type { PlaceResolver } from "../places/resolver";
@@ -137,9 +138,13 @@ export async function generateItinerary(
     (request.excludeNames ?? []).map(normalizeName).filter((n) => !mustSet.has(n)),
   );
 
+  const trace = createTrace();
+
   const candidates = await deps.fetchCandidates(request);
+  trace.mark("후보추출");
   const places = (await resolveAll(deps.resolver, candidates, request.destination, mustNames))
     .filter((p) => !excluded.has(normalizeName(p.name)));
+  trace.mark(`실재검증(${candidates.length}건)`);
 
   // 모델이 필수 방문지를 빠뜨릴 수 있다. 프롬프트로 부탁하는 대신 직접 확인해 채운다.
   const present = new Set(places.map((p) => normalizeName(p.name)));
@@ -158,6 +163,7 @@ export async function generateItinerary(
       found.push({ ...r.value, mustVisit: true });
     }
     if (found.length > 0) places.unshift(...found);
+    trace.mark(`필수복구(${missing.length}건)`);
   }
 
   const { min } = INTENSITY_RANGE[request.intensity];
@@ -195,6 +201,7 @@ export async function generateItinerary(
     // 구제로 들어온 장소도 집합에 넣어야 뒤에서 식당으로 다시 뽑히지 않는다.
     extras.forEach((p) => usedIds.add(p.id));
     assigned = fillToMinimum({ ...assigned, leftover: [...assigned.leftover, ...extras] }, min);
+    trace.mark(`AT4구제(${shortIdx.length}권역)`);
   }
 
   const dayOrder = orderDays(assigned.centers);
@@ -210,11 +217,13 @@ export async function generateItinerary(
     const meals = await pickMeals(deps.resolver, layout.mealSlots, usedIds, excluded);
     scheduled.push({ day: index + 1, activities: insertMeals(layout, meals) });
   }
+  trace.mark(`식사배치(${dayOrder.length}일)`);
 
   // 설명이 없어도 장소·동선·시각은 이미 확정됐다. 설명 때문에 일정 전체를 버리지 않는다.
   const narrations = await deps
     .narrateTrip(scheduled, request.destination)
     .catch(() => scheduled.map(() => null));
+  trace.mark("설명");
 
   let degraded = false;
   const planContent = scheduled.map((day, i) => {
@@ -242,6 +251,11 @@ export async function generateItinerary(
       })),
     };
   });
+
+  // 어느 단계가 예산을 먹는지 로그 한 줄로 남긴다. 응답에는 넣지 않는다.
+  console.error(
+    `[TripMate] 파이프라인 ${trace.format()}${degraded ? " · 설명강등" : ""}`,
+  );
 
   return { planContent, narrationDegraded: degraded };
 }

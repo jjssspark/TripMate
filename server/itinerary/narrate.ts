@@ -68,21 +68,34 @@ function pickRaw(raw: RawDay[], day: ScheduledDay, index: number): RawDay | unde
   return raw.find((r) => r.day === day.day) ?? raw[index];
 }
 
-/** 한 일차의 응답이 쓸 수 있는지 본다. 하나라도 어긋나면 그 일차만 버린다. */
-function validate(got: RawDay | undefined, day: ScheduledDay): NarratedDay | null {
+type Validated = { day: NarratedDay } | { reason: string };
+
+/**
+ * 한 일차의 응답이 쓸 수 있는지 본다. 하나라도 어긋나면 그 일차만 버린다.
+ *
+ * 버린 이유를 남기는 건 진단 때문이다. 강등이 타임아웃 때문인지 검증 실패 때문인지
+ * 구분이 안 되면 예산만 만지다 끝난다 (실제로 설명 4초에도 강등이 났다).
+ */
+function validate(got: RawDay | undefined, day: ScheduledDay): Validated {
   const items = got?.activities;
-  if (!got || !Array.isArray(items)) return null;
-  if (items.length !== day.activities.length) return null;
+  if (!got || !Array.isArray(items)) return { reason: `${day.day}일차 활동배열없음` };
+  if (items.length !== day.activities.length) {
+    return { reason: `${day.day}일차 개수불일치(기대 ${day.activities.length}, 받음 ${items.length})` };
+  }
 
   // 설명을 인덱스로 갖다 붙이므로 순서가 어긋나면 A 장소에 B 설명이 조용히 달린다.
   // 이름을 되돌려받아 대조한다.
   for (const [i, a] of day.activities.entries()) {
     const item = items[i];
-    if (typeof item?.description !== "string" || item.description.trim() === "") return null;
-    if (normalizeName(item.title ?? "") !== normalizeName(a.place.name)) return null;
+    if (typeof item?.description !== "string" || item.description.trim() === "") {
+      return { reason: `${day.day}일차 설명없음(${i + 1}번째)` };
+    }
+    if (normalizeName(item.title ?? "") !== normalizeName(a.place.name)) {
+      return { reason: `${day.day}일차 이름불일치(기대 "${a.place.name}", 받음 "${item.title ?? ""}")` };
+    }
   }
 
-  return {
+  return { day: {
     theme: got.theme ?? `${day.day}일차`,
     description: got.description ?? "",
     activities: day.activities.map((a, i) => ({
@@ -90,7 +103,7 @@ function validate(got: RawDay | undefined, day: ScheduledDay): NarratedDay | nul
       description: items[i].description as string,
       tags: items[i].tags ?? [],
     })),
-  };
+  } };
 }
 
 /**
@@ -100,6 +113,18 @@ function validate(got: RawDay | undefined, day: ScheduledDay): NarratedDay | nul
  * 검증은 일차별로 한다. 어긋난 일차만 null로 내려보내고 나머지는 살린다.
  * 호출 자체가 실패하면 그대로 던진다 — 쿼터 소진인지 판별하는 건 호출부의 몫이다.
  */
+/**
+ * 설명만 flash-lite를 쓴다. 이유는 둘이다.
+ *
+ * 1. 지연: 4일치를 한 번에 받으면 flash로는 14초 상한을 넘겨 전 일차가 강등됐다
+ *    (실측 13,970ms). 출력 토큰이 지연을 지배하는 단계라 가벼운 모델이 유리하다.
+ * 2. 무료 한도: 한도가 모델·프로젝트당으로 잡히므로 후보 추출(flash)과 버킷이 갈린다.
+ *    한쪽이 바닥나도 다른 쪽이 살아 있다. ADR-6이 남겨둔 카드다.
+ *
+ * 장소·순서·시각은 이미 확정된 뒤라 이 단계는 글만 쓴다. 모델을 낮춰도 일정 품질은 안 바뀐다.
+ */
+const NARRATE_MODEL = "gemini-2.5-flash-lite";
+
 export async function narrateTrip(
   ai: GoogleGenAI,
   days: ScheduledDay[],
@@ -116,7 +141,7 @@ export async function narrateTrip(
     .join("\n\n");
 
   const response = await ai.models.generateContent({
-    model: "gemini-2.5-flash",
+    model: NARRATE_MODEL,
     contents: `${destination} 여행 ${days.length}일 일정입니다. 순서와 장소는 이미 확정됐으니 바꾸지 마세요.
 
 ${list}
@@ -145,5 +170,12 @@ days 배열에 ${days.length}개 일차를 모두 담고, day 필드에 몇 일�
   }
 
   const raw = Array.isArray(parsed.days) ? parsed.days : [];
-  return days.map((day, i) => validate(pickRaw(raw, day, i), day));
+  const results = days.map((day, i) => validate(pickRaw(raw, day, i), day));
+
+  const rejected = results.flatMap((r) => ("reason" in r ? [r.reason] : []));
+  if (rejected.length > 0) {
+    console.error(`[TripMate] 설명 검증 실패: ${rejected.join(" · ")}`);
+  }
+
+  return results.map((r) => ("day" in r ? r.day : null));
 }

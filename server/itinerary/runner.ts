@@ -1,7 +1,9 @@
 import { GoogleGenAI } from "@google/genai";
 import { fetchCandidates } from "./candidates";
 import { narrateTrip } from "./narrate";
-import { generateItinerary, type PipelineDeps, type PlanRequest } from "./pipeline";
+import { generateItinerary, type PipelineDeps, type PlanDay, type PlanRequest } from "./pipeline";
+import { applyIntent, classifyFeedback } from "./intent";
+import { wantsDifferentPlaces } from "./revise";
 import { createKakaoResolver } from "../places/kakao";
 import { isQuotaError, toQuotaError } from "./quota";
 import { requireApiKeys } from "./config";
@@ -12,6 +14,10 @@ const CANDIDATE_RETRY_TIMEOUT_MS = 5_000;
 // 여행 전체를 한 번에 받으므로 일차 하나짜리 호출보다 오래 걸린다.
 const NARRATE_TIMEOUT_MS = 14_000;
 export const TOTAL_BUDGET_MS = 25_000;
+
+const createClient = (apiKey: string) =>
+  new GoogleGenAI({ apiKey, httpOptions: { headers: { "User-Agent": "aistudio-build" } } });
+
 // 설명이 끝난 뒤에도 이 예산 안에서 planContent 조립이 남는다. 그만큼은 설명에 주지 않는다.
 // (사진 첨부는 runWithinBudget 바깥에서 도므로 이 예산에 포함되지 않는다.)
 const NARRATE_RESERVE_MS = 1_000;
@@ -58,26 +64,56 @@ export async function fetchWithRetry<T>(call: () => Promise<T>): Promise<T> {
   }
 }
 
+function createDeps(ai: GoogleGenAI, kakaoKey: string): PipelineDeps {
+  return {
+    resolver: createKakaoResolver(kakaoKey),
+    fetchCandidates: (req) => fetchWithRetry(() => fetchCandidates(ai, req)),
+    narrateTrip: (days, destination) => narrateTrip(ai, days, destination),
+  };
+}
+
 // 단계별 예산만으로는 총합이 안 잡힌다. 전체에도 상한을 둬서 클라이언트가 끊기 전에 우리가 끊는다.
 export async function runPipeline(request: PlanRequest) {
   const { geminiKey, kakaoKey } = requireApiKeys();
-
-  const ai = new GoogleGenAI({
-    apiKey: geminiKey,
-    httpOptions: { headers: { "User-Agent": "aistudio-build" } },
-  });
+  const ai = createClient(geminiKey);
 
   try {
-    return await runWithinBudget(
-      {
-        resolver: createKakaoResolver(kakaoKey),
-        fetchCandidates: (req) => fetchWithRetry(() => fetchCandidates(ai, req)),
-        narrateTrip: (days, destination) => narrateTrip(ai, days, destination),
-      },
-      request,
-    );
+    return await runWithinBudget(createDeps(ai, kakaoKey), request);
   } catch (err) {
     // 쿼터 소진을 진짜 서버 오류와 섞으면 사용자는 무엇을 해야 할지 알 수 없다.
+    throw toQuotaError(err);
+  }
+}
+
+/**
+ * 수정은 피드백을 요청 조건으로 옮긴 뒤 파이프라인을 다시 태운다.
+ *
+ * 분류를 거치지 않으면 피드백이 comments 문자열에만 남는데, 그 뒤 단계가 전부
+ * 결정론적이라 "여유롭게 해줘" 같은 요청이 결과를 바꾸지 못한다. applied는 무엇이
+ * 실제로 반영됐는지이며, 비어 있으면 호출부가 수정했다고 말해서는 안 된다.
+ */
+export async function runRevision(
+  base: PlanRequest,
+  feedback: string,
+  previousNames: readonly string[],
+): Promise<{ planContent: PlanDay[]; narrationDegraded: boolean; applied: string[] }> {
+  const { geminiKey, kakaoKey } = requireApiKeys();
+  const ai = createClient(geminiKey);
+
+  try {
+    const classified = await classifyFeedback(ai, feedback, previousNames);
+    // 분류가 아무것도 못 건졌을 때만 키워드 판정으로 받친다. 모델 호출이 실패하거나
+    // 빈 객체를 돌려줘도 "장소 바꿔줘"만큼은 예전처럼 동작해야 한다.
+    const intent = Object.keys(classified).length > 0
+      ? classified
+      : wantsDifferentPlaces(feedback) ? { replaceAllPlaces: true } : {};
+
+    const { request, applied } = applyIntent(base, feedback, intent, previousNames);
+    console.error(`[TripMate] 수정 의도 반영: ${applied.join(", ") || "없음"}`);
+
+    const result = await runWithinBudget(createDeps(ai, kakaoKey), request);
+    return { ...result, applied };
+  } catch (err) {
     throw toQuotaError(err);
   }
 }
