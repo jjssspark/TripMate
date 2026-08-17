@@ -21,6 +21,11 @@ const createClient = (apiKey: string) =>
 // 설명이 끝난 뒤에도 이 예산 안에서 planContent 조립이 남는다. 그만큼은 설명에 주지 않는다.
 // (사진 첨부는 runWithinBudget 바깥에서 도므로 이 예산에 포함되지 않는다.)
 const NARRATE_RESERVE_MS = 1_000;
+/**
+ * 설명 호출이 성립하는 최소 예산. 실측에서 4일치 배치가 flash-lite로 8.4~10.3초 걸렸고,
+ * 4초를 받은 호출은 4초를 다 태우고 실패했다. 이보다 적게 남았으면 부르지 않는다.
+ */
+const NARRATE_FLOOR_MS = 6_000;
 
 /**
  * 총 예산 안에서 파이프라인을 돌린다. 바깥 타임아웃만 두면 설명 단계가 예산을 넘길 때
@@ -37,8 +42,10 @@ export async function runWithinBudget(
     ...deps,
     narrateTrip: (days, destination) => {
       const remaining = deadline - Date.now() - NARRATE_RESERVE_MS;
-      // 남은 예산이 없으면 호출하지 않는다. 없는 예산으로 불러 놓고 타임아웃을 기다릴 이유가 없다.
-      if (remaining <= 0) return Promise.reject(new TimeoutError("설명", 0));
+      // 남은 예산이 하한에 못 미치면 부르지 않는다. 실측에서 4초를 받은 호출이 4초를 다
+      // 태우고 실패했다 — 어차피 강등될 일정에 벽시계 4초와 무료 한도 1회를 버린 셈이다.
+      // 못 끝낼 걸 알면 즉시 최소 문구로 넘긴다.
+      if (remaining < NARRATE_FLOOR_MS) return Promise.reject(new TimeoutError("설명", Math.max(remaining, 0)));
       return withTimeout(
         deps.narrateTrip(days, destination),
         Math.min(NARRATE_TIMEOUT_MS, remaining),

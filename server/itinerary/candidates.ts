@@ -2,8 +2,16 @@ import { Type, type GoogleGenAI } from "@google/genai";
 import { INTENSITY_RANGE } from "./types";
 import type { Candidate, Intensity, PlaceCategory } from "./types";
 
-const MAX_CANDIDATES = 60;
-const OVERSAMPLE = 2.5;
+/**
+ * 출력 토큰이 이 단계의 지연을 지배한다. 실측에서 후보 추출이 2.7~11.4초로 흔들렸고,
+ * 튀는 날은 25초 예산을 먹어 설명이 통째로 강등됐다. 고를 여지를 남기는 선에서
+ * 가장 적게 요청해 그 꼬리를 줄인다.
+ *
+ * 하한 근거: 카카오 대조에서 절반이 떨어져도 강도 하한을 채울 수 있어야 한다.
+ * 빡빡하게 하한은 4개/일이라 1.8배면 2배 여유가 남는다.
+ */
+const MAX_CANDIDATES = 44;
+const OVERSAMPLE = 1.8;
 
 /** 필요량보다 넉넉히 받아야 3단계에서 고를 수 있고, 같은 조건에도 결과가 달라진다. */
 export function candidateCount(days: number, intensity: Intensity): number {

@@ -53,10 +53,9 @@ describe("runWithinBudget", () => {
     expect(result.planContent[0].activities[0].description).not.toBe("");
   });
 
-  it("남은 예산이 조금 있으면 그만큼만 기다리고 총 예산은 넘기지 않는다", async () => {
-    // 벽시계로 재지 않는다. 끝나지 않는 설명을 주고 "설명을 기다리지 않고 끝났는가"로 판정한다.
-    // 예산 2000ms에서 여유분 1000ms를 뺀 약 1000ms 뒤에 설명 쪽 타임아웃이 먼저 터져야 한다.
-    // 설명 타임아웃이 남은 예산을 무시하면(고정 10초) 바깥 2000ms 예산이 먼저 터져 throw 한다.
+  // 실측에서 4초를 받은 설명 호출이 4초를 다 태우고 실패했다. 어차피 강등될 일정에
+  // 벽시계 4초와 무료 한도 1회를 버린 셈이라, 하한에 못 미치면 아예 부르지 않게 했다.
+  it("남은 예산이 설명 하한에 못 미치면 아예 부르지 않는다", async () => {
     let calls = 0;
     let completed = 0;
     const deps: PipelineDeps = {
@@ -74,15 +73,22 @@ describe("runWithinBudget", () => {
 
     const result = await runWithinBudget(deps, request, 2_000);
 
-    expect(calls).toBe(1); // 일차마다가 아니라 여행 전체를 한 번에 부른다
-    expect(completed).toBe(0); // 그런데 끝나기를 기다리지는 않았다
+    expect(calls).toBe(0); // 못 끝낼 걸 알면 한도를 쓰지 않는다
+    expect(completed).toBe(0);
     expect(result.narrationDegraded).toBe(true);
     expect(result.planContent).toHaveLength(3);
   });
 
-  it("예산이 넉넉하면 설명을 그대로 쓴다", async () => {
-    const result = await runWithinBudget(depsWithSlowNarration(1), request, 5_000);
+  it("예산이 넉넉하면 설명을 한 번 부르고 그대로 쓴다", async () => {
+    let calls = 0;
+    const deps = depsWithSlowNarration(1);
+    const result = await runWithinBudget(
+      { ...deps, narrateTrip: (d, dest) => { calls += 1; return deps.narrateTrip(d, dest); } },
+      request,
+      10_000,
+    );
 
+    expect(calls).toBe(1); // 일차마다가 아니라 여행 전체를 한 번에 부른다
     expect(result.narrationDegraded).toBe(false);
     expect(result.planContent[0].theme).toBe("테마");
   });

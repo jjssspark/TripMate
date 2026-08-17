@@ -2,10 +2,17 @@ import { describe, it, expect } from "vitest";
 import { candidateCount, buildCandidatePrompt } from "../../server/itinerary/candidates";
 
 describe("candidateCount", () => {
-  it("필요량의 2.5배를 요청하고 60개로 자른다", () => {
-    expect(candidateCount(3, "빡빡하게")).toBe(60); // 3*8*2.5 = 60
-    expect(candidateCount(3, "여유롭게")).toBe(23); // 3*3*2.5 = 22.5 → 23
-    expect(candidateCount(10, "빡빡하게")).toBe(60); // 상한
+  it("필요량의 1.8배를 요청하고 44개로 자른다", () => {
+    expect(candidateCount(3, "빡빡하게")).toBe(44); // 3*8*1.8 = 43.2 → 44, 상한 44
+    expect(candidateCount(3, "여유롭게")).toBe(17); // 3*3*1.8 = 16.2 → 17
+    expect(candidateCount(10, "빡빡하게")).toBe(44); // 상한
+  });
+
+  // 출력 토큰이 후보 추출 지연을 지배한다. 추출이 예산을 먹으면 설명이 통째로 강등되므로
+  // 고를 여지를 남기는 선에서 가장 적게 요청한다.
+  it("검증에서 절반이 떨어져도 강도 하한을 채울 만큼은 요청한다", () => {
+    expect(candidateCount(2, "빡빡하게")).toBeGreaterThanOrEqual(2 * 4 * 2);
+    expect(candidateCount(3, "여유롭게")).toBeGreaterThanOrEqual(3 * 1 * 2);
   });
 });
 
@@ -16,7 +23,7 @@ describe("buildCandidatePrompt", () => {
       styles: ["맛집", "자연"], mustVisitPlaces: "성산일출봉, 한라산", comments: "",
     });
     expect(prompt).toContain("성산일출봉, 한라산");
-    expect(prompt).toContain("60곳의 이름과 분류만");
+    expect(prompt).toContain("44곳의 이름과 분류만");
   });
 
   it("예산이 다르면 프롬프트가 달라진다", () => {
