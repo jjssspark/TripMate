@@ -21,6 +21,8 @@ export type FeedbackIntent = {
   replaceAllPlaces?: boolean;
   /** 특정 장소만 뺀다. 이전 일정에 실제로 있던 이름만 남긴다. */
   excludePlaces?: string[];
+  /** 하루를 몇 시에 끝낼지. day가 없으면 전 일차에 적용한다. */
+  endTime?: { hour: number; day?: number };
 };
 
 /** 설명과 같은 경량 모델을 쓴다. 후보 추출(flash)과 한도 버킷을 갈라 놓기 위해서다. */
@@ -38,8 +40,21 @@ const INTENT_SCHEMA = {
     addPlaces: { type: Type.ARRAY, items: { type: Type.STRING }, description: "새로 넣어 달라는 장소의 고유 상호명" },
     replaceAllPlaces: { type: Type.BOOLEAN, description: "장소를 전부 다른 곳으로 바꿔 달라는 요청일 때만 true" },
     excludePlaces: { type: Type.ARRAY, items: { type: Type.STRING }, description: "빼 달라는 장소. 현재 일정에 있는 이름만" },
+    endTime: {
+      type: Type.OBJECT,
+      properties: {
+        hour: { type: Type.INTEGER, description: "하루를 끝낼 시각. 24시간제 정수. 예: 오후 4시면 16" },
+        day: { type: Type.INTEGER, description: "적용할 일차. 전체면 넣지 않는다. 마지막날이면 마지막 일차 번호" },
+      },
+      required: ["hour"],
+      description: "하루를 몇 시에 끝내 달라는 요청일 때만",
+    },
   },
 } as const;
+
+/** 관광 종료 시각으로 받아들일 범위. 새벽이나 자정 넘김은 요청으로 보지 않는다. */
+const MIN_END_HOUR = 10;
+const MAX_END_HOUR = 23;
 
 const nonEmpty = (v: unknown): v is string => typeof v === "string" && v.trim().length > 0;
 
@@ -53,7 +68,26 @@ function stringList(value: unknown): string[] | undefined {
  * 모델 출력을 그대로 믿지 않는다. 스키마에 enum을 걸어도 값이 어긋나 오는 경우가 있고,
  * 없는 장소를 지어내면 배제해도 아무 효과가 없으면서 후보만 줄어든다.
  */
-function sanitize(raw: Record<string, unknown>, previousNames: readonly string[]): FeedbackIntent {
+const isInt = (v: unknown): v is number => typeof v === "number" && Number.isInteger(v);
+
+/** 모델이 30시나 없는 일차를 돌려주면 버린다. 그대로 받으면 하루가 통째로 잘려 나간다. */
+function endTimeOf(value: unknown, totalDays?: number): FeedbackIntent["endTime"] {
+  if (!value || typeof value !== "object") return undefined;
+  const { hour, day } = value as { hour?: unknown; day?: unknown };
+
+  if (!isInt(hour) || hour < MIN_END_HOUR || hour > MAX_END_HOUR) return undefined;
+  if (day === undefined || day === null) return { hour };
+  if (!isInt(day) || day < 1) return undefined;
+  if (totalDays !== undefined && day > totalDays) return undefined;
+
+  return { hour, day };
+}
+
+function sanitize(
+  raw: Record<string, unknown>,
+  previousNames: readonly string[],
+  totalDays?: number,
+): FeedbackIntent {
   const intent: FeedbackIntent = {};
 
   if (INTENSITIES.includes(raw.intensity as Intensity)) intent.intensity = raw.intensity as Intensity;
@@ -73,6 +107,9 @@ function sanitize(raw: Record<string, unknown>, previousNames: readonly string[]
   const exclude = stringList(raw.excludePlaces)?.filter((n) => known.has(n));
   if (exclude && exclude.length > 0) intent.excludePlaces = exclude;
 
+  const endTime = endTimeOf(raw.endTime, totalDays);
+  if (endTime) intent.endTime = endTime;
+
   return intent;
 }
 
@@ -84,6 +121,7 @@ export async function classifyFeedback(
   ai: GoogleGenAI,
   feedback: string,
   previousNames: readonly string[],
+  totalDays?: number,
 ): Promise<FeedbackIntent> {
   try {
     const response = await ai.models.generateContent({
@@ -93,10 +131,11 @@ export async function classifyFeedback(
 "${feedback}"
 
 현재 일정의 장소: ${previousNames.join(", ") || "없음"}
-
+${totalDays ? `전체 일정: ${totalDays}일 (마지막날은 ${totalDays}일차)\n` : ""}
 이 요청을 아래 항목으로 옮겨 적으세요. 해당하지 않는 항목은 넣지 마세요.
 요청에 없는 내용을 추측해서 채우지 마세요.
-빼 달라는 장소는 위 목록에 있는 이름만 그대로 쓰세요.`,
+빼 달라는 장소는 위 목록에 있는 이름만 그대로 쓰세요.
+"마지막날"처럼 일차를 말로 가리키면 실제 일차 번호로 바꿔 적으세요.`,
       config: {
         systemInstruction: "당신은 요청을 구조화된 JSON으로만 옮기는 분류기입니다.",
         responseMimeType: "application/json",
@@ -111,7 +150,7 @@ export async function classifyFeedback(
     const parsed: unknown = JSON.parse(text.trim());
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
 
-    return sanitize(parsed as Record<string, unknown>, previousNames);
+    return sanitize(parsed as Record<string, unknown>, previousNames, totalDays);
   } catch {
     return {};
   }
@@ -124,6 +163,7 @@ const APPLIED_LABEL = {
   mustVisit: "필수 방문지",
   replaceAll: "장소 전체 교체",
   exclude: "일부 장소 제외",
+  endTime: "종료 시각",
 } as const;
 
 /**
@@ -177,6 +217,20 @@ export function applyIntent(
       request.excludeNames = exclude;
       applied.push(APPLIED_LABEL.exclude);
     }
+  }
+
+  if (intent.endTime) {
+    const minutes = intent.endTime.hour * 60;
+    const targets = intent.endTime.day !== undefined
+      ? [intent.endTime.day]
+      : Array.from({ length: base.days }, (_, i) => i + 1);
+    // 이전에 지정한 다른 일차는 살린다. 3일차만 당겨 달라고 했는데 1일차 지정이
+    // 사라지면 사용자는 두 번째 요청에서 첫 요청을 잃는다.
+    request.dayEndLimits = {
+      ...base.dayEndLimits,
+      ...Object.fromEntries(targets.map((d) => [d, minutes])),
+    };
+    applied.push(APPLIED_LABEL.endTime);
   }
 
   // 원문은 후보 추출 프롬프트에 힌트로 남긴다. 다만 반영을 보장하지 못하므로 applied에는 넣지 않는다.

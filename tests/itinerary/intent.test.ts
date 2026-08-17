@@ -91,6 +91,28 @@ describe("applyIntent", () => {
     expect(request.mustVisitPlaces).toBe("성산일출봉");
   });
 
+  // "마지막날 오후 4시로 끝내줘"가 무시되던 건 종료 상한이 모듈 상수였기 때문이다.
+  it("특정 일차 종료 시각을 그 일차에만 건다", () => {
+    const { request, applied } = apply({ endTime: { hour: 16, day: 3 } });
+
+    expect(request.dayEndLimits).toEqual({ 3: 960 });
+    expect(applied).toContain("종료 시각");
+  });
+
+  it("일차를 지정하지 않으면 전 일차에 건다", () => {
+    const { request } = apply({ endTime: { hour: 17 } });
+
+    expect(request.dayEndLimits).toEqual({ 1: 1020, 2: 1020, 3: 1020 });
+  });
+
+  it("기존 종료 시각 지정이 있으면 덮어쓰지 않고 합친다", () => {
+    const base = { ...BASE, dayEndLimits: { 1: 1020 } };
+
+    const { request } = applyIntent(base, "3일차는 4시에", { endTime: { hour: 16, day: 3 } }, 이전장소);
+
+    expect(request.dayEndLimits).toEqual({ 1: 1020, 3: 960 });
+  });
+
   it("피드백 원문은 항상 comments에 남긴다", () => {
     const { request } = apply({}, "좀 더 여유롭게 해줘");
 
@@ -180,6 +202,26 @@ describe("classifyFeedback", () => {
     const intent = await classifyFeedback(ai, "성산일출봉 빼줘", 이전장소);
 
     expect(intent.excludePlaces).toEqual(["성산일출봉"]);
+  });
+
+  it("범위를 벗어난 종료 시각은 버린다", async () => {
+    const { ai } = fakeAi({ endTime: { hour: 30 } });
+
+    expect(await classifyFeedback(ai, "30시에 끝내줘", 이전장소)).toEqual({});
+  });
+
+  it("여행 일수를 벗어난 일차 지정은 버린다", async () => {
+    const { ai } = fakeAi({ endTime: { hour: 16, day: 9 } });
+
+    expect(await classifyFeedback(ai, "9일차는 4시에", 이전장소, 3)).toEqual({});
+  });
+
+  it("여행 일수 안의 일차 지정은 살린다", async () => {
+    const { ai } = fakeAi({ endTime: { hour: 16, day: 3 } });
+
+    const intent = await classifyFeedback(ai, "마지막날은 4시에", 이전장소, 3);
+
+    expect(intent.endTime).toEqual({ hour: 16, day: 3 });
   });
 
   it("설명 모델과 같은 경량 모델을 써서 후보 추출 한도를 건드리지 않는다", async () => {

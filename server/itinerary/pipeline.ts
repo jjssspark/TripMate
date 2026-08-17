@@ -20,6 +20,11 @@ export type PlanRequest = {
   companion?: string;
   /** 다시 추천하지 않을 장소 이름. 수정 요청에서 이전 일정을 넘긴다. */
   excludeNames?: readonly string[];
+  /**
+   * 일차별 관광 종료 상한(자정 기준 분). 없는 일차는 기본 18:00을 쓴다.
+   * "마지막날은 4시에 끝내줘" 같은 요청이 닿을 곳이 여기다.
+   */
+  dayEndLimits?: Readonly<Record<number, number>>;
 };
 
 export type PipelineDeps = {
@@ -213,7 +218,12 @@ export async function generateItinerary(
     const ordered = orderWithinDay(assigned.buckets[clusterIdx], previousTail);
     previousTail = ordered.length > 0 ? ordered[ordered.length - 1] : null;
 
-    const layout = layoutDay(ordered, request.transportMode, request.intensity);
+    const layout = layoutDay(
+      ordered,
+      request.transportMode,
+      request.intensity,
+      request.dayEndLimits?.[index + 1],
+    );
     const meals = await pickMeals(deps.resolver, layout.mealSlots, usedIds, excluded);
     scheduled.push({ day: index + 1, activities: insertMeals(layout, meals) });
   }

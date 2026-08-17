@@ -205,3 +205,52 @@ describe("insertMeals", () => {
     expect(layout.activities.map((a) => a.startMinutes)).toEqual(snapshot);
   });
 });
+
+// "마지막날 오후 4시로 끝내줘" 같은 요청이 닿을 곳이 없었다. 종료 상한이 모듈 상수라
+// 요청별로 바꿀 수 없었고, 그래서 수정 요청이 조용히 무시됐다.
+describe("layoutDay 종료 시각 지정", () => {
+  const 오후4시 = 960;
+
+  it("지정하지 않으면 기존 18시 상한을 그대로 쓴다", () => {
+    const 기본 = layoutDay(가까운8곳, "자차", "빡빡하게");
+    const 명시 = layoutDay(가까운8곳, "자차", "빡빡하게", GENERAL_END_LIMIT);
+
+    expect(명시.activities.map((a) => a.startMinutes)).toEqual(기본.activities.map((a) => a.startMinutes));
+  });
+
+  it("종료 시각을 당기면 관광이 그 안에 끝난다", () => {
+    const layout = layoutDay(가까운8곳, "자차", "빡빡하게", 오후4시);
+    const last = layout.activities[layout.activities.length - 1];
+
+    expect(last.startMinutes + last.stayMinutes).toBeLessThanOrEqual(오후4시);
+  });
+
+  it("종료 시각을 당기면 장소 수가 줄어든다", () => {
+    const 기본 = layoutDay(가까운8곳, "자차", "빡빡하게");
+    const 이른종료 = layoutDay(가까운8곳, "자차", "빡빡하게", 오후4시);
+
+    expect(이른종료.activities.length).toBeLessThan(기본.activities.length);
+  });
+
+  // 4시에 끝내 달라는 건 저녁 전에 일정을 마치겠다는 뜻이다. 저녁을 4시에 꽂으면
+  // 요청을 지킨 척하면서 실제로는 어기는 셈이 된다.
+  it("저녁 시간 전에 끝내면 저녁 슬롯을 만들지 않는다", () => {
+    const types = layoutDay(가까운8곳, "자차", "빡빡하게", 오후4시).mealSlots.map((s) => s.mealType);
+
+    expect(types).not.toContain("저녁");
+    expect(types).toContain("점심");
+  });
+
+  it("18시 종료면 저녁 슬롯이 그대로 있다", () => {
+    const types = layoutDay(가까운8곳, "자차", "빡빡하게").mealSlots.map((s) => s.mealType);
+
+    expect(types).toContain("저녁");
+  });
+
+  // 하한까지 줄여도 못 맞추는 날이 있다. 장소를 0개로 만들지는 않는다.
+  it("종료 시각이 너무 일러도 강도 하한 아래로는 줄이지 않는다", () => {
+    const layout = layoutDay(멀리떨어진8곳, "대중교통", "빡빡하게", 600);
+
+    expect(layout.activities.length).toBeGreaterThanOrEqual(INTENSITY_RANGE["빡빡하게"].min);
+  });
+});

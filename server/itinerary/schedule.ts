@@ -16,6 +16,8 @@ const LUNCH_MAX = 810;          // 13:30
  */
 export const GENERAL_END_LIMIT = 1080;
 const DINNER_MAX = 1170;        // 19:30
+/** 17:00 — 종료 시각이 이보다 이르면 저녁을 넣지 않는다. 저녁 전에 마치겠다는 요청이다. */
+const DINNER_MIN = 1020;
 
 const MEAL_STAY: Record<MealType, number> = { 아침: 45, 점심: 60, 저녁: 90 };
 
@@ -61,6 +63,7 @@ export function layoutDay(
   places: readonly ResolvedPlace[],
   mode: TransportMode,
   intensity: Intensity,
+  endLimit: number = GENERAL_END_LIMIT,
 ): DayLayout {
   const min = INTENSITY_RANGE[intensity].min;
   let kept = [...places];
@@ -71,7 +74,7 @@ export function layoutDay(
     // 더 잘려 나가고, 빡빡하게가 자기 하한으로 내려앉아 강도 선택이 무의미해진다.
     // 식사 때문에 마지막 활동이 18시를 조금 넘기는 편이 장소를 잃는 것보다 낫다.
     const last = activities[activities.length - 1];
-    if (last.startMinutes + last.stayMinutes <= GENERAL_END_LIMIT) break;
+    if (last.startMinutes + last.stayMinutes <= endLimit) break;
     // 뒤에서부터 덜어내되 필수 방문지는 건너뛴다. 사용자가 이름을 찍어 요청한 곳이다.
     const fromEnd = [...kept].reverse().findIndex((p) => !p.mustVisit);
     if (fromEnd === -1) break; // 남은 게 전부 필수면 더 줄일 수 없다
@@ -87,15 +90,19 @@ export function layoutDay(
     const lunch = lunchAt(activities);
     mealSlots.push({ mealType: "점심", near: lunch.anchor.place, atMinutes: lunch.atMinutes });
 
-    const tail = activities[activities.length - 1];
-    const rawDinner = tail.startMinutes + tail.stayMinutes + 15;
-    // 하한 규칙이 하루를 19:30 너머까지 밀어낸 날은 저녁을 창 안으로 끌어내리면
-    // 아직 진행 중인 활동과 겹친다. 그런 날만 마지막 활동 뒤로 보낸다.
-    mealSlots.push({
-      mealType: "저녁",
-      near: tail.place,
-      atMinutes: rawDinner > DINNER_MAX ? rawDinner : Math.max(GENERAL_END_LIMIT, rawDinner),
-    });
+    // 저녁 전에 하루를 끝내 달라고 한 날에 저녁을 꽂으면, 요청을 지킨 척하면서
+    // 실제로는 어기는 셈이 된다. 그런 날은 저녁 자체를 넣지 않는다.
+    if (endLimit >= DINNER_MIN) {
+      const tail = activities[activities.length - 1];
+      const rawDinner = tail.startMinutes + tail.stayMinutes + 15;
+      // 하한 규칙이 하루를 19:30 너머까지 밀어낸 날은 저녁을 창 안으로 끌어내리면
+      // 아직 진행 중인 활동과 겹친다. 그런 날만 마지막 활동 뒤로 보낸다.
+      mealSlots.push({
+        mealType: "저녁",
+        near: tail.place,
+        atMinutes: rawDinner > DINNER_MAX ? rawDinner : Math.max(endLimit, rawDinner),
+      });
+    }
   }
 
   return { activities, mealSlots };

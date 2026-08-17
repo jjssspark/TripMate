@@ -101,7 +101,7 @@ export async function runRevision(
   const ai = createClient(geminiKey);
 
   try {
-    const classified = await classifyFeedback(ai, feedback, previousNames);
+    const classified = await classifyFeedback(ai, feedback, previousNames, base.days);
     // 분류가 아무것도 못 건졌을 때만 키워드 판정으로 받친다. 모델 호출이 실패하거나
     // 빈 객체를 돌려줘도 "장소 바꿔줘"만큼은 예전처럼 동작해야 한다.
     const intent = Object.keys(classified).length > 0
