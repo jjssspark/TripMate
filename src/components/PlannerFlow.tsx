@@ -23,7 +23,8 @@ interface PlannerFlowProps {
   onError: (message: string, type?: "success" | "error") => void;
 }
 
-/** 생성 요청을 끊는 상한. 서버 예산(27초)보다 넉넉히 잡아 서버 폴백이 먼저 오게 한다. */
+/** 생성 요청을 끊는 상한. 서버 예산(25초)보다 넉넉히 잡아 서버의 실패 응답이 먼저 도착하게 한다.
+ *  여기서 먼저 끊으면 사용자는 이유 없는 타임아웃만 보고, 서버가 준비한 안내(장소 부족·한도 소진)를 놓친다. */
 const GENERATION_TIMEOUT_MS = 30_000;
 
 export default function PlannerFlow({
@@ -187,7 +188,7 @@ export default function PlannerFlow({
 
     console.log("★ [TripMate AI] AI 일정 생성 요청 시작:", requestPayload);
 
-    // 서버는 27초 예산 안에서 응답하도록 되어 있다. 여기서 30초에 한 번 더 끊어
+    // 서버는 25초 예산 안에서 응답하도록 되어 있다. 여기서 30초에 한 번 더 끊어
     // 네트워크가 멈춰도 로딩 화면이 무한정 돌지 않게 한다.
     const controller = new AbortController();
     const abortTimer = setTimeout(() => controller.abort(), GENERATION_TIMEOUT_MS);

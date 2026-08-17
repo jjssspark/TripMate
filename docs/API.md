@@ -69,33 +69,60 @@ TripMate가 실제로 노출하는 엔드포인트의 요청/응답 계약입니
 }
 ```
 
-**Response 200 (성공 — 폴백, AI 실패 시)**
+**설명 강등 (`narrationDegraded`)**
 
-요청이 실패해도 **HTTP 상태 코드는 200을 유지**합니다. 대신 위와 같은 모양에 `isFallback: true` 필드가 추가되고, 장소명은 `src/lib/recommendedSpots.ts`의 정적 데이터에서 채워집니다.
+성공 응답에는 `narrationDegraded: boolean`이 붙습니다. 장소·동선·시각은 확정됐지만 Gemini 설명 생성이 실패해 주소 기반 최소 문구로 대체된 경우 `true`입니다. 실패가 아니므로 200으로 나가고, 클라이언트는 오류 배너 대신 안내 톤으로 표시합니다.
 
-```ts
-{
-  // ...위와 동일한 필드
-  isFallback: true;
-}
-```
+> **변경 (2026-08-16, 커밋 `eabb669`)**: 이전에는 AI 실패 시 `src/lib/recommendedSpots.ts`의 정적 데이터로 대체 일정을 만들어 `isFallback: true`와 함께 200으로 돌려줬습니다. 실재하지 않는 일정을 그럴듯하게 내보내는 것보다 실패를 드러내는 편이 낫다고 판단해 제거했습니다. 지금은 실패 종류에 따라 아래 상태 코드로 나갑니다.
 
-폴백이 발동하는 경우: ① `GEMINI_API_KEY`/`VITE_GEMINI_API_KEY` 미설정 ② 27초 예산 안에 주 모델·보조 모델·주 모델 재시도가 모두 실패 ③ Gemini 응답 JSON 파싱 실패.
-
-**Response 400**
+**Response 400 — 입력 검증 실패**
 
 ```ts
-{ error: "Destination is required" }   // destination 누락
-{ error: "Invalid JSON body" }         // 요청 바디가 JSON이 아님
+{ success: false, data: null, error: { code, message, field } }
 ```
+
+| code | field | 상황 |
+|---|---|---|
+| `DESTINATION_REQUIRED` | `destination` | 목적지 누락 |
+| `TRIP_DATES_INVALID` | `startDate` | 날짜가 유효하지 않음 |
+| `TRIP_TOO_LONG` | `endDate` | 허용 기간 초과 |
+| `INVALID_JSON` | `null` | 요청 바디가 JSON이 아님 |
 
 **Response 405**
 
 ```ts
-{ error: "Method Not Allowed" }   // GET 등 POST 이외 메서드
+{ success: false, data: null, error: { code: "METHOD_NOT_ALLOWED", ... } }
 ```
 
-**타임아웃 예산**: 서버 내부적으로 27초(`GENERATION_BUDGET_MS`) 안에서만 재시도하고 넘기면 폴백을 반환합니다. 클라이언트는 30초에 요청 자체를 끊습니다.
+**Response 422 — 조건 문제**
+
+```ts
+{ success: false, data: null,
+  error: { code: "NOT_ENOUGH_PLACES", message: "조건에 맞는 장소를 N곳만 확인했습니다. ...", field: null } }
+```
+
+Kakao 검증을 통과한 실재 장소가 일정을 채우기에 모자란 경우입니다. 서버 오류가 아니라 조건 문제이므로 무엇을 조정하면 되는지(기간 단축, 강도 하향)를 `message`에 담아 그대로 내려보냅니다.
+
+**Response 429 — AI 무료 한도 소진**
+
+```ts
+{ success: false, data: null,
+  error: { code: "AI_QUOTA_EXCEEDED",
+           message: "오늘 무료 AI 사용량을 다 썼습니다. 한국시간 오후 4시 이후 다시 시도해 주세요.",
+           field: null } }
+```
+
+Gemini 무료 티어는 모델·프로젝트당 하루 20회입니다. 일정 1건에 2회를 쓰므로 하루 약 10건이 상한입니다. 조건을 바꿔도 풀리지 않고 기다리는 것 외에 방법이 없으므로 500과 분리했습니다. 재시도 시각은 태평양시 자정 리셋을 한국시간으로 환산해 계산합니다(서머타임에 따라 16시/17시).
+
+**Response 500**
+
+```ts
+{ success: false, data: null, error: { code: "PLAN_GENERATION_FAILED", ... } }
+```
+
+위에 해당하지 않는 실패입니다. 내부 정보는 응답에 담지 않고 서버 로그에만 남깁니다.
+
+**타임아웃 예산**: 서버는 25초(`server/itinerary/runner.ts`의 `TOTAL_BUDGET_MS`) 안에서 처리하고, 넘기면 실패로 응답합니다. 클라이언트는 30초에 요청 자체를 끊습니다.
 
 ---
 
