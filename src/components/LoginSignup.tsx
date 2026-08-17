@@ -11,9 +11,11 @@ import { getSupabaseClient, buildUserSession } from "../lib/supabaseClient";
 
 interface LoginSignupProps {
   onLoginSuccess: (session: UserSession) => void;
+  /** 전역 Toast. alert()은 렌더러를 블로킹해 자동화가 멈추므로 쓰지 않는다. */
+  onShowToast?: (message: string, type: "success" | "error") => void;
 }
 
-export default function LoginSignup({ onLoginSuccess }: LoginSignupProps) {
+export default function LoginSignup({ onLoginSuccess, onShowToast }: LoginSignupProps) {
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -165,7 +167,7 @@ export default function LoginSignup({ onLoginSuccess }: LoginSignupProps) {
           };
 
           localStorage.setItem("tripmate_session", JSON.stringify(sessionData));
-          alert("성공적으로 회원가입이 완료되었습니다!");
+          onShowToast?.("성공적으로 회원가입이 완료되었습니다!", "success");
           onLoginSuccess(sessionData);
         }
       }

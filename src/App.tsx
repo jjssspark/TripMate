@@ -602,7 +602,7 @@ export default function App() {
           </div>
         ) : (
           <div className="flex flex-col items-center justify-center pt-8">
-            <LoginSignup onLoginSuccess={handleLoginSuccess} />
+            <LoginSignup onLoginSuccess={handleLoginSuccess} onShowToast={showToast} />
           </div>
         )}
       </main>
