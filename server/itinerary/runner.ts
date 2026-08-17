@@ -1,13 +1,15 @@
 import { GoogleGenAI } from "@google/genai";
 import { fetchCandidates } from "./candidates";
-import { narrateDay } from "./narrate";
+import { narrateTrip } from "./narrate";
 import { generateItinerary, type PipelineDeps, type PlanRequest } from "./pipeline";
 import { createKakaoResolver } from "../places/kakao";
+import { isQuotaError, toQuotaError } from "./quota";
 import { withTimeout, TimeoutError } from "./timeout";
 
 const CANDIDATE_TIMEOUT_MS = 14_000;
 const CANDIDATE_RETRY_TIMEOUT_MS = 5_000;
-const NARRATE_TIMEOUT_MS = 10_000;
+// 여행 전체를 한 번에 받으므로 일차 하나짜리 호출보다 오래 걸린다.
+const NARRATE_TIMEOUT_MS = 14_000;
 export const TOTAL_BUDGET_MS = 25_000;
 // 설명이 끝난 뒤에도 이 예산 안에서 planContent 조립이 남는다. 그만큼은 설명에 주지 않는다.
 // (사진 첨부는 runWithinBudget 바깥에서 도므로 이 예산에 포함되지 않는다.)
@@ -26,18 +28,33 @@ export async function runWithinBudget(
   const deadline = Date.now() + budgetMs;
   const budgeted: PipelineDeps = {
     ...deps,
-    narrateDay: (day, destination) => {
+    narrateTrip: (days, destination) => {
       const remaining = deadline - Date.now() - NARRATE_RESERVE_MS;
       // 남은 예산이 없으면 호출하지 않는다. 없는 예산으로 불러 놓고 타임아웃을 기다릴 이유가 없다.
-      if (remaining <= 0) return Promise.reject(new TimeoutError(`${day.day}일차 설명`, 0));
+      if (remaining <= 0) return Promise.reject(new TimeoutError("설명", 0));
       return withTimeout(
-        deps.narrateDay(day, destination),
+        deps.narrateTrip(days, destination),
         Math.min(NARRATE_TIMEOUT_MS, remaining),
-        `${day.day}일차 설명`,
+        "설명",
       );
     },
   };
   return withTimeout(generateItinerary(budgeted, request), budgetMs, "일정 생성");
+}
+
+/**
+ * 시간 초과는 모델이 느린 것이라 다시 불러도 같다. 남은 예산만 태우고 끝난다.
+ * 쿼터 소진도 다시 불러도 같은 429다 — 남은 한도만 한 번 더 깎는다.
+ * 일시적 API 오류만 한 번 더 시도한다. 이쪽은 대개 즉시 실패해 예산을 거의 안 쓴다.
+ */
+export async function fetchWithRetry<T>(call: () => Promise<T>): Promise<T> {
+  try {
+    return await withTimeout(call(), CANDIDATE_TIMEOUT_MS, "후보 추출");
+  } catch (err) {
+    if (err instanceof TimeoutError) throw err;
+    if (isQuotaError(err)) throw err;
+    return withTimeout(call(), CANDIDATE_RETRY_TIMEOUT_MS, "후보 추출 재시도");
+  }
 }
 
 // 단계별 예산만으로는 총합이 안 잡힌다. 전체에도 상한을 둬서 클라이언트가 끊기 전에 우리가 끊는다.
@@ -52,21 +69,17 @@ export async function runPipeline(request: PlanRequest) {
     httpOptions: { headers: { "User-Agent": "aistudio-build" } },
   });
 
-  return runWithinBudget(
-    {
-      resolver: createKakaoResolver(kakaoKey),
-      // 시간 초과는 모델이 느린 것이라 다시 불러도 같다. 남은 예산만 태우고 끝난다.
-      // 일시적 API 오류만 한 번 더 시도한다 — 이쪽은 대개 즉시 실패해 예산을 거의 안 쓴다.
-      fetchCandidates: async (req) => {
-        try {
-          return await withTimeout(fetchCandidates(ai, req), CANDIDATE_TIMEOUT_MS, "후보 추출");
-        } catch (err) {
-          if (err instanceof TimeoutError) throw err;
-          return withTimeout(fetchCandidates(ai, req), CANDIDATE_RETRY_TIMEOUT_MS, "후보 추출 재시도");
-        }
+  try {
+    return await runWithinBudget(
+      {
+        resolver: createKakaoResolver(kakaoKey),
+        fetchCandidates: (req) => fetchWithRetry(() => fetchCandidates(ai, req)),
+        narrateTrip: (days, destination) => narrateTrip(ai, days, destination),
       },
-      narrateDay: (day, destination) => narrateDay(ai, day, destination),
-    },
-    request,
-  );
+      request,
+    );
+  } catch (err) {
+    // 쿼터 소진을 진짜 서버 오류와 섞으면 사용자는 무엇을 해야 할지 알 수 없다.
+    throw toQuotaError(err);
+  }
 }

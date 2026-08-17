@@ -28,9 +28,10 @@ export function minimalNarration(day: ScheduledDay, destination: string): Narrat
   };
 }
 
-const NARRATE_SCHEMA = {
+const DAY_SCHEMA = {
   type: Type.OBJECT,
   properties: {
+    day: { type: Type.INTEGER, description: "몇 일차인지" },
     theme: { type: Type.STRING, description: "이 날의 핵심 테마 제목" },
     description: { type: Type.STRING, description: "이 날 일정의 한 줄 요약" },
     activities: {
@@ -46,28 +47,84 @@ const NARRATE_SCHEMA = {
       },
     },
   },
-  required: ["theme", "description", "activities"],
+  required: ["day", "theme", "description", "activities"],
 } as const;
 
-export async function narrateDay(
+const NARRATE_SCHEMA = {
+  type: Type.OBJECT,
+  properties: { days: { type: Type.ARRAY, items: DAY_SCHEMA } },
+  required: ["days"],
+} as const;
+
+type RawDay = {
+  day?: number;
+  theme?: string;
+  description?: string;
+  activities?: Array<{ title?: string; description?: string; tags?: string[] }>;
+};
+
+/** 응답 일차가 순서대로 온다는 보장이 없다. day 번호로 맞추고, 없으면 인덱스로 떨어뜨린다. */
+function pickRaw(raw: RawDay[], day: ScheduledDay, index: number): RawDay | undefined {
+  return raw.find((r) => r.day === day.day) ?? raw[index];
+}
+
+/** 한 일차의 응답이 쓸 수 있는지 본다. 하나라도 어긋나면 그 일차만 버린다. */
+function validate(got: RawDay | undefined, day: ScheduledDay): NarratedDay | null {
+  const items = got?.activities;
+  if (!got || !Array.isArray(items)) return null;
+  if (items.length !== day.activities.length) return null;
+
+  // 설명을 인덱스로 갖다 붙이므로 순서가 어긋나면 A 장소에 B 설명이 조용히 달린다.
+  // 이름을 되돌려받아 대조한다.
+  for (const [i, a] of day.activities.entries()) {
+    const item = items[i];
+    if (typeof item?.description !== "string" || item.description.trim() === "") return null;
+    if (normalizeName(item.title ?? "") !== normalizeName(a.place.name)) return null;
+  }
+
+  return {
+    theme: got.theme ?? `${day.day}일차`,
+    description: got.description ?? "",
+    activities: day.activities.map((a, i) => ({
+      title: a.place.name,
+      description: items[i].description as string,
+      tags: items[i].tags ?? [],
+    })),
+  };
+}
+
+/**
+ * 여행 전체 설명을 한 번의 호출로 받는다. 일차마다 부르면 3일 일정에 후보 추출까지 4회를 쓰는데,
+ * 무료 티어 한도가 모델당 하루 20회라 일정 다섯 건이면 바닥난다.
+ *
+ * 검증은 일차별로 한다. 어긋난 일차만 null로 내려보내고 나머지는 살린다.
+ * 호출 자체가 실패하면 그대로 던진다 — 쿼터 소진인지 판별하는 건 호출부의 몫이다.
+ */
+export async function narrateTrip(
   ai: GoogleGenAI,
-  day: ScheduledDay,
+  days: ScheduledDay[],
   destination: string,
-): Promise<NarratedDay> {
+): Promise<Array<NarratedDay | null>> {
   // 장소·순서·시각은 이미 확정됐다. 여기서는 글만 쓴다.
-  const list = day.activities
-    .map((a, i) => `${i + 1}. ${formatTime(a.startMinutes)} ${a.place.name} (${a.place.category}, ${a.place.address})`)
-    .join("\n");
+  const list = days
+    .map((day) => {
+      const lines = day.activities
+        .map((a, i) => `  ${i + 1}. ${formatTime(a.startMinutes)} ${a.place.name} (${a.place.category}, ${a.place.address})`)
+        .join("\n");
+      return `[${day.day}일차]\n${lines}`;
+    })
+    .join("\n\n");
 
   const response = await ai.models.generateContent({
     model: "gemini-2.5-flash",
-    contents: `${destination} 여행 ${day.day}일차 일정입니다. 순서와 장소는 이미 확정됐으니 바꾸지 마세요.
+    contents: `${destination} 여행 ${days.length}일 일정입니다. 순서와 장소는 이미 확정됐으니 바꾸지 마세요.
 
 ${list}
 
 각 활동에 대해 여행 가이드북 톤의 존댓말 설명을 2~3문장, 120자 이내로 써주세요.
 미사여구보다 그곳에서 뭘 하면 좋은지, 뭘 먹으면 좋은지 같은 실용 정보를 넣으세요.
-activities 배열은 위 순서와 개수를 정확히 지켜주세요.
+days 배열에 ${days.length}개 일차를 모두 담고, day 필드에 몇 일차인지 적으세요.
+각 일차의 activities 배열은 위 순서와 개수를 정확히 지켜주세요.
 각 항목의 title에는 위 목록의 장소 이름을 그대로 옮겨 적으세요.`,
     config: {
       systemInstruction: "당신은 항상 정확한 JSON만 출력하는 여행 도우미입니다. 한국어로 응답하세요.",
@@ -78,42 +135,15 @@ activities 배열은 위 순서와 개수를 정확히 지켜주세요.
   });
 
   const text = response.text;
-  if (!text) throw new Error(`${day.day}일차 설명 응답이 비었습니다.`);
+  if (!text) throw new Error("설명 응답이 비었습니다.");
 
-  let parsed;
+  let parsed: { days?: RawDay[] };
   try {
-    parsed = JSON.parse(text.trim()) as {
-      theme: string;
-      description: string;
-      activities: Array<{ title?: string; description?: string; tags?: string[] }>;
-    };
+    parsed = JSON.parse(text.trim()) as { days?: RawDay[] };
   } catch {
-    throw new Error(`${day.day}일차 설명 응답이 JSON이 아닙니다.`);
+    throw new Error("설명 응답이 JSON이 아닙니다.");
   }
 
-  if (!Array.isArray(parsed.activities) || parsed.activities.length !== day.activities.length) {
-    throw new Error(`${day.day}일차 설명 개수 불일치: ${parsed.activities?.length} vs ${day.activities.length}`);
-  }
-
-  // 설명을 인덱스로 갖다 붙이므로 순서가 어긋나면 A 장소에 B 설명이 조용히 달린다.
-  // 이름을 되돌려받아 대조한다. 어긋나면 던지고, 호출부가 minimalNarration으로 내린다.
-  day.activities.forEach((a, i) => {
-    const got = parsed.activities[i];
-    if (!got || typeof got.description !== "string" || got.description.trim() === "") {
-      throw new Error(`${day.day}일차 ${i + 1}번째 설명이 비었습니다.`);
-    }
-    if (normalizeName(got.title ?? "") !== normalizeName(a.place.name)) {
-      throw new Error(`${day.day}일차 ${i + 1}번째 설명이 다른 장소의 것입니다.`);
-    }
-  });
-
-  return {
-    theme: parsed.theme,
-    description: parsed.description,
-    activities: day.activities.map((a, i) => ({
-      title: a.place.name,
-      description: parsed.activities[i].description as string,
-      tags: parsed.activities[i].tags ?? [],
-    })),
-  };
+  const raw = Array.isArray(parsed.days) ? parsed.days : [];
+  return days.map((day, i) => validate(pickRaw(raw, day, i), day));
 }

@@ -22,7 +22,7 @@ const deps: PipelineDeps = {
   resolver: fakeResolver,
   fetchCandidates: async () =>
     Array.from({ length: 12 }, (_, i) => ({ name: `장소${i}`, category: "관광" as const })),
-  narrateDay: async () => { throw new Error("설명 생성 실패"); },
+  narrateTrip: async () => { throw new Error("설명 생성 실패"); },
 };
 
 const request: PlanRequest = {
@@ -72,7 +72,7 @@ function makeRescueDeps(): { deps: PipelineDeps; categoryCalls: string[] } {
       ...Array.from({ length: 10 }, (_, i) => ({ name: `A${i}`, category: "관광" as const })),
       ...Array.from({ length: 3 }, (_, i) => ({ name: `B${i}`, category: "관광" as const })),
     ],
-    narrateDay: async () => { throw new Error("설명 생성 실패"); },
+    narrateTrip: async () => { throw new Error("설명 생성 실패"); },
   };
 
   return { deps, categoryCalls };
@@ -151,7 +151,7 @@ describe("generateItinerary", () => {
         ...Array.from({ length: 10 }, (_, i) => ({ name: `A${i}`, category: "관광" as const })),
         ...Array.from({ length: 3 }, (_, i) => ({ name: `B${i}`, category: "관광" as const })),
       ],
-      narrateDay: async () => { throw new Error("설명 생성 실패"); },
+      narrateTrip: async () => { throw new Error("설명 생성 실패"); },
     };
 
     const result = await generateItinerary(dupDeps, rescueRequest);
@@ -233,7 +233,7 @@ describe("generateItinerary", () => {
       // 후보 목록에 성산일출봉이 없다 — 모델이 프롬프트 지시를 무시한 상황을 흉내낸다.
       fetchCandidates: async () =>
         Array.from({ length: 12 }, (_, i) => ({ name: `장소${i}`, category: "관광" as const })),
-      narrateDay: async () => { throw new Error("설명 생성 실패"); },
+      narrateTrip: async () => { throw new Error("설명 생성 실패"); },
     };
     const mustRequest: PlanRequest = { ...request, mustVisitPlaces: "성산일출봉" };
 
@@ -262,7 +262,7 @@ describe("generateItinerary", () => {
         { name: "성산 일출봉", category: "자연" as const },
         ...Array.from({ length: 11 }, (_, i) => ({ name: `장소${i}`, category: "관광" as const })),
       ],
-      narrateDay: async () => { throw new Error("설명 생성 실패"); },
+      narrateTrip: async () => { throw new Error("설명 생성 실패"); },
     };
     const spacedRequest: PlanRequest = { ...request, mustVisitPlaces: "성산일출봉" };
 
@@ -291,7 +291,7 @@ describe("generateItinerary", () => {
       // 후보 목록에 둘 다 없다 — 둘 다 복구 경로를 거친다.
       fetchCandidates: async () =>
         Array.from({ length: 12 }, (_, i) => ({ name: `장소${i}`, category: "관광" as const })),
-      narrateDay: async () => { throw new Error("설명 생성 실패"); },
+      narrateTrip: async () => { throw new Error("설명 생성 실패"); },
     };
     const collideRequest: PlanRequest = { ...request, mustVisitPlaces: "성산일출봉,성산일출봉(유네스코)" };
 
@@ -334,7 +334,7 @@ describe("generateItinerary", () => {
       resolver,
       fetchCandidates: async () =>
         Array.from({ length: 12 }, (_, i) => ({ name: `장소${i}`, category: "관광" as const })),
-      narrateDay: async () => { throw new Error("설명 생성 실패"); },
+      narrateTrip: async () => { throw new Error("설명 생성 실패"); },
     };
     const excludeMealRequest: PlanRequest = { ...request, excludeNames: ["금능이모네"] };
 
@@ -361,7 +361,7 @@ describe("generateItinerary", () => {
         { name: "성산일출봉", category: "자연" as const },
         ...Array.from({ length: 11 }, (_, i) => ({ name: `장소${i}`, category: "관광" as const })),
       ],
-      narrateDay: async () => { throw new Error("설명 생성 실패"); },
+      narrateTrip: async () => { throw new Error("설명 생성 실패"); },
     };
     const conflictRequest: PlanRequest = {
       ...request, mustVisitPlaces: "성산일출봉", excludeNames: ["성산일출봉"],

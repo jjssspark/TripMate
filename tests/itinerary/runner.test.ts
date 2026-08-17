@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { runWithinBudget } from "../../server/itinerary/runner";
+import { fetchWithRetry, runWithinBudget } from "../../server/itinerary/runner";
 import type { PipelineDeps, PlanRequest } from "../../server/itinerary/pipeline";
 import type { PlaceResolver } from "../../server/places/resolver";
 import type { PlaceCategory, ResolvedPlace } from "../../server/itinerary/types";
@@ -31,13 +31,13 @@ function depsWithSlowNarration(narrationMs: number): PipelineDeps {
     resolver,
     fetchCandidates: async () =>
       Array.from({ length: 12 }, (_, i) => ({ name: `장소${i}`, category: "관광" as const })),
-    narrateDay: async (day) => {
+    narrateTrip: async (days) => {
       await sleep(narrationMs);
-      return {
+      return days.map((day) => ({
         theme: "테마",
         description: "설명",
         activities: day.activities.map((a) => ({ title: a.place.name, description: "d", tags: [] })),
-      };
+      }));
     },
   };
 }
@@ -63,7 +63,7 @@ describe("runWithinBudget", () => {
       resolver,
       fetchCandidates: async () =>
         Array.from({ length: 12 }, (_, i) => ({ name: `장소${i}`, category: "관광" as const })),
-      narrateDay: async () => {
+      narrateTrip: async () => {
         calls += 1;
         // 영원히 resolve되지 않는다. 타이머가 없어 이벤트 루프를 붙잡지도 않는다.
         const never = await new Promise<never>(() => {});
@@ -74,7 +74,7 @@ describe("runWithinBudget", () => {
 
     const result = await runWithinBudget(deps, request, 2_000);
 
-    expect(calls).toBe(3); // 예산이 남아 있어 설명을 실제로 호출은 했다
+    expect(calls).toBe(1); // 일차마다가 아니라 여행 전체를 한 번에 부른다
     expect(completed).toBe(0); // 그런데 끝나기를 기다리지는 않았다
     expect(result.narrationDegraded).toBe(true);
     expect(result.planContent).toHaveLength(3);
@@ -85,5 +85,43 @@ describe("runWithinBudget", () => {
 
     expect(result.narrationDegraded).toBe(false);
     expect(result.planContent[0].theme).toBe("테마");
+  });
+});
+
+describe("fetchWithRetry", () => {
+  it("일시적 오류는 한 번 더 시도한다", async () => {
+    // Arrange
+    let calls = 0;
+    const call = async () => {
+      calls += 1;
+      if (calls === 1) throw new Error("일시적 오류");
+      return "ok";
+    };
+
+    // Act
+    const result = await fetchWithRetry(call);
+
+    // Assert
+    expect(result).toBe("ok");
+    expect(calls).toBe(2);
+  });
+
+  it("쿼터 소진이면 재시도하지 않는다", async () => {
+    // Arrange — 429는 다시 불러도 같은 429다. 재시도하면 남은 한도만 한 번 더 깎는다.
+    let calls = 0;
+    const quota = Object.assign(new Error("RESOURCE_EXHAUSTED"), { name: "ApiError", status: 429 });
+    const call = async () => { calls += 1; throw quota; };
+
+    // Act & Assert
+    await expect(fetchWithRetry(call)).rejects.toBe(quota);
+    expect(calls).toBe(1);
+  });
+
+  it("성공하면 한 번만 부른다", async () => {
+    let calls = 0;
+    const call = async () => { calls += 1; return "ok"; };
+
+    await expect(fetchWithRetry(call)).resolves.toBe("ok");
+    expect(calls).toBe(1);
   });
 });

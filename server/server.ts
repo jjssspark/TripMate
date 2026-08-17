@@ -14,6 +14,7 @@ import { runPipeline } from "./itinerary/runner";
 import { attachPhotos, getMockupImage } from "./places/photos";
 import { parsePlanInput } from "./itinerary/entry";
 import { NotEnoughPlacesError } from "./itinerary/pipeline";
+import { QuotaExceededError } from "./itinerary/quota";
 import { mergeFeedbackIntoRequest, excludeNamesFor } from "./itinerary/revise";
 
 dotenv.config();
@@ -201,6 +202,13 @@ app.post("/api/generate-plan", async (req, res) => {
         error: { code: "NOT_ENOUGH_PLACES", message: err.message, field: null },
       });
     }
+    // 쿼터 소진도 서버 오류가 아니다. 조건을 바꿔도 소용없고, 기다리는 것 외에 할 일이 없다.
+    if (err instanceof QuotaExceededError) {
+      return res.status(429).json({
+        success: false, data: null,
+        error: { code: "AI_QUOTA_EXCEEDED", message: err.message, field: null },
+      });
+    }
     return res.status(500).json({
       success: false, data: null,
       error: { code: "PLAN_GENERATION_FAILED", message: "일정을 만들지 못했습니다. 조건을 조금 바꿔 다시 시도해 주세요.", field: null },
@@ -256,6 +264,13 @@ app.post("/api/revise-plan", async (req, res) => {
       return res.status(422).json({
         success: false, data: null,
         error: { code: "NOT_ENOUGH_PLACES", message: err.message, field: null },
+      });
+    }
+    // 쿼터 소진은 서버 오류가 아니다. 다시 눌러도 소용없고, 기다리는 것 외에 할 일이 없다.
+    if (err instanceof QuotaExceededError) {
+      return res.status(429).json({
+        success: false, data: null,
+        error: { code: "AI_QUOTA_EXCEEDED", message: err.message, field: null },
       });
     }
     return res.status(500).json({

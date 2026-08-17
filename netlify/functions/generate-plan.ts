@@ -2,6 +2,7 @@ import { runPipeline } from "../../server/itinerary/runner";
 import { attachPhotos } from "../../server/places/photos";
 import { parsePlanInput } from "../../server/itinerary/entry";
 import { NotEnoughPlacesError } from "../../server/itinerary/pipeline";
+import { QuotaExceededError } from "../../server/itinerary/quota";
 
 const headers = {
   "Access-Control-Allow-Origin": "*",
@@ -58,6 +59,10 @@ export const handler = async (event: any) => {
     // 장소 부족은 서버 오류가 아니라 조건 문제다. 무엇을 조정하면 되는지 그대로 내려보낸다.
     if (err instanceof NotEnoughPlacesError) {
       return fail(422, "NOT_ENOUGH_PLACES", err.message);
+    }
+    // 쿼터 소진도 서버 오류가 아니다. 조건을 바꿔도 소용없고, 기다리는 것 외에 할 일이 없다.
+    if (err instanceof QuotaExceededError) {
+      return fail(429, "AI_QUOTA_EXCEEDED", err.message);
     }
     return fail(500, "PLAN_GENERATION_FAILED", "일정을 만들지 못했습니다. 조건을 조금 바꿔 다시 시도해 주세요.");
   }

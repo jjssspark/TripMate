@@ -24,7 +24,8 @@ export type PlanRequest = {
 export type PipelineDeps = {
   resolver: PlaceResolver;
   fetchCandidates: (request: PlanRequest) => Promise<Candidate[]>;
-  narrateDay: (day: ScheduledDay, destination: string) => Promise<NarratedDay>;
+  /** 어긋난 일차는 null로 온다. 호출 자체가 실패하면 던진다. */
+  narrateTrip: (days: ScheduledDay[], destination: string) => Promise<Array<NarratedDay | null>>;
 };
 
 export type PlanActivity = {
@@ -210,16 +211,16 @@ export async function generateItinerary(
     scheduled.push({ day: index + 1, activities: insertMeals(layout, meals) });
   }
 
-  const narrations = await Promise.allSettled(
-    scheduled.map((d) => deps.narrateDay(d, request.destination)),
-  );
+  // 설명이 없어도 장소·동선·시각은 이미 확정됐다. 설명 때문에 일정 전체를 버리지 않는다.
+  const narrations = await deps
+    .narrateTrip(scheduled, request.destination)
+    .catch(() => scheduled.map(() => null));
 
   let degraded = false;
   const planContent = scheduled.map((day, i) => {
-    const n = narrations[i];
-    const ok = n.status === "fulfilled" && n.value.activities.length === day.activities.length;
-    if (!ok) degraded = true;
-    const narration = ok ? n.value : minimalNarration(day, request.destination);
+    const n = narrations[i] ?? null;
+    if (n === null) degraded = true;
+    const narration = n ?? minimalNarration(day, request.destination);
 
     return {
       day: day.day,
