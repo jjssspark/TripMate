@@ -47,7 +47,9 @@ __pycache__/
 data/
 
 # 포폴 산출물 원본 — 용량이 커서 저장소에 넣지 않는다.
-# 최적화본(output/screenshots/*.jpg, output/video/demo*.mp4|gif)만 커밋한다.
 output/screenshots/_raw/
-output/video/*.mov
-output/video/*.MOV
+
+# 데모 영상은 유튜브로 호스팅하고 저장소에는 두지 않는다.
+# README가 https://youtu.be/R79fwGeFfRU 를 링크한다. 저장소에 두면
+# 스크린샷과 달리 diff가 불가능한 수 MB 바이너리가 히스토리에 쌓인다.
+output/video/

@@ -1,216 +1,312 @@
-# ✈️ TripMate AI - AI 여행 플래너
+<div align="center">
 
-AI 기술을 활용하여 사용자의 취향과 일정에 맞는 최적의 여행 계획을 설계해주는 **AI 여행 플래너, TripMate AI** 프로젝트입니다.
+# ✈️ TripMate
 
----
+### AI가 짠 여행 일정, 실재하는 장소만
 
-## 🌟 프로젝트 개요
+조건만 입력하면 동선과 식사 시간까지 맞춘 일정이 나옵니다.<br/>
+AI가 추천한 장소는 카카오 로컬 API로 실재 여부를 대조한 뒤에만 일정에 올립니다.
 
-> **"당신의 여행 취향과 조건만 입력하세요. AI가 최적의 동선과 일정을 설계해 드립니다."**
->
-> TripMate AI는 로그인 후 간단한 여행지, 일정, 예산, 동행 유형, 그리고 선호하는 스타일(맛집, 쇼핑, 자연 등)을 입력하면 AI가 동선과 식사 시간대를 고려한 완성도 높은 여행 일정을 생성하고, 이를 저장 및 관리할 수 있도록 돕는 서비스입니다.
+<br/>
 
-🔗 [배포 바로가기](https://tripgather.netlify.app)
+[![데모](https://img.shields.io/badge/🌐_라이브_데모-tripgather.netlify.app-2563eb?style=for-the-badge)](https://tripgather.netlify.app)
+[![영상](https://img.shields.io/badge/▶_데모_영상-YouTube-ff0000?style=for-the-badge)](https://youtu.be/R79fwGeFfRU)
 
----
+![React](https://img.shields.io/badge/React-20232a?style=flat-square&logo=react)
+![TypeScript](https://img.shields.io/badge/TypeScript-3178c6?style=flat-square&logo=typescript&logoColor=white)
+![Vite](https://img.shields.io/badge/Vite-646cff?style=flat-square&logo=vite&logoColor=white)
+![Supabase](https://img.shields.io/badge/Supabase-3ecf8e?style=flat-square&logo=supabase&logoColor=white)
+![Gemini](https://img.shields.io/badge/Gemini_API-8e75b2?style=flat-square&logo=googlegemini&logoColor=white)
+![Netlify](https://img.shields.io/badge/Netlify-00c7b7?style=flat-square&logo=netlify&logoColor=white)
+![Tests](https://img.shields.io/badge/tests-251_passing-3fb950?style=flat-square)
 
-## 🚀 핵심 기능 (MVP 및 선택 기능)
+<br/>
 
-### 1. 회원 관리 및 보안
-*   **로그인 / 회원가입 (MVP):** Supabase Auth를 활용한 이메일/비밀번호 기반의 회원 가입 및 로그인.
-*   **비인가 접근 제어 (비기능):** 로그인하지 않은 비인증 사용자는 개인 여행 일정 페이지 및 저장 기능 접근 불가.
+[<img src="https://img.youtube.com/vi/R79fwGeFfRU/maxresdefault.jpg" width="640" alt="TripMate 데모 영상 — 조건 입력부터 일정 생성·저장까지"/>](https://youtu.be/R79fwGeFfRU)
 
-### 2. AI 여행 일정 생성
-*   **여행 조건 입력 (MVP):** 여행지, 일정(날짜), 예산, 동행 유형 지정.
-*   **선호 스타일 선택 (MVP):** 맛집, 카페, 쇼핑, 자연, 역사/문화, 사진 스팟, 여유로운 일정 등 개인 취향 반영.
-*   **AI 일정 추천 (MVP):**
-    *   입력 조건을 바탕으로 Day별/시간대별 최적 일정 수립.
-    *   선택한 스타일(맛집/카페)을 고려하여 점심/저녁 시간대에 식사 관련 장소 스마트 배치.
-    *   반드시 방문해야 할 필수 장소(Must-Visit) 반영.
-    *   장소별 시간, 장소명, 카테고리, 그리고 간단한 설명(팁) 제공.
+<sub>▲ 클릭하면 재생됩니다 · 1분 23초 · 조건 입력 → 일정 생성 → 수정 요청 → 보관함 저장</sub>
 
-### 3. 일정 탐색 및 연동
-*   **Google Maps 연동 (MVP):** 생성된 일정 카드 내 장소를 클릭하면 구글 맵스(Google Maps) 검색 페이지로 바로 이동하여 위치 및 상세 정보 확인 가능.
-*   **자연어 피드백 기반 일정 수정 (선택):** "맛집 위주로 변경해줘" 등 AI에게 추가적인 요구사항을 전달하여 일정 변경 가능.
-*   **일정 수동 편집 (선택):** 사용자가 직접 방문 시간, 장소명, 메모 등을 커스텀 수정.
-
-### 4. 일정 보관 및 관리
-*   **일정 저장 및 목록 조회 (MVP):** 마음에 드는 AI 추천 일정을 보관함에 저장하고 마이페이지에서 언제든지 확인.
-*   **공유 기능 (선택):** 고유 URL 또는 텍스트 복사 형태로 동행자나 타인에게 일정 전달.
-*   **일정 삭제 (선택):** 저장된 여행 일정을 보관함에서 삭제 관리.
+</div>
 
 ---
 
-## 🛠 기술 스택
+## 이 프로젝트가 푸는 문제
 
-### Frontend
-*   **React** & **Vite**: 빠르고 모던한 프런트엔드 애플리케이션 구축
-*   **TypeScript**: 타입 안정성 확보
-*   **CSS / Styling**: 반응형 웹 및 모던한 프리미엄 UI 디자인 설계
-*   **Build & Deployment**: **Netlify**
+LLM에게 여행 일정을 통째로 맡기면 세 가지가 깨집니다.
 
-### Backend & Database
-*   **Supabase**:
-    *   **Authentication**: 사용자 로그인/회원가입 및 세션 관리
-    *   **Database (PostgreSQL)**: 사용자별 여행 계획 데이터 보관
-*   **AI Engine**: Gemini API / Open AI (프롬프트 엔지니어링 기반 여행 일정 생성)
+| 문제 | TripMate의 해법 |
+| :--- | :--- |
+| 존재하지 않는 장소를 지어낸다 | 카카오 로컬 API로 대조해 검증 통과분만 사용 |
+| 같은 장소가 여러 날에 중복된다 | 코드가 전역 집합으로 차단 (프롬프트에 부탁하지 않음) |
+| 동선이 지그재그로 꼬인다 | k-means로 날짜를 묶고 TSP로 순서를 정함 |
+
+프롬프트로 부탁하는 대신 검증 가능한 지점으로 옮겼습니다.
 
 ---
 
-## 📊 데이터베이스 스키마
+## 일정 생성 파이프라인
 
-`users` → `travel_plans` → `travel_items` 3단 구조입니다. 일정 메타데이터(`travel_plans`)와 Day별 활동(`travel_items`)이 분리돼 있고, 하나의 jsonb 컬럼에 몰아넣지 않습니다.
+```mermaid
+flowchart LR
+    A["① 후보 추출<br/><sub>Gemini</sub>"] --> B["② 실재 검증<br/><sub>Kakao Local</sub>"]
+    B --> C["③ 날짜 배정<br/><sub>k-means</sub>"]
+    C --> D["④ 순서 결정<br/><sub>TSP</sub>"]
+    D --> E["⑤ 시각 배치<br/><sub>이동시간·식사</sub>"]
+    E --> F["⑥ 설명 작성<br/><sub>Gemini</sub>"]
 
-```
-auth.users ──< users(user_seq) ──< travel_plans(id) ──< travel_items(plan_id)
+    style A fill:#8e75b2,color:#fff,stroke:none
+    style F fill:#8e75b2,color:#fff,stroke:none
+    style B fill:#fee500,color:#000,stroke:none
+    style C fill:#e2e8f0,color:#1e293b,stroke:none
+    style D fill:#e2e8f0,color:#1e293b,stroke:none
+    style E fill:#e2e8f0,color:#1e293b,stroke:none
 ```
 
-### `travel_plans` — 일정 메타데이터
+AI가 맡는 건 ①과 ⑥ 두 단계뿐입니다. 중복·동선·시각은 코드가 강제합니다.
 
-| 컬럼명 | 타입 | 설명 |
-| :--- | :--- | :--- |
-| `id` | `uuid` | Primary Key |
-| `user_seq` | `int` | `users.user_seq` 참조 |
-| `title` | `text` | 여행 계획 제목 |
-| `destination` | `text` | 목적지 |
-| `start_date` / `end_date` | `date` | 여행 기간 |
-| `budget` | `text` | 예산 수준 |
-| `companion` | `text` | 동행 유형 |
-| `styles` | `text[]` | 선호 스타일 키워드 |
-| `must_visit_places` | `text[]` | 필수 방문 장소 |
-| `is_shared` | `boolean` | 공유 링크(`/trip/:id`) 공개 여부 |
-| `created_at` | `timestamptz` | 생성 일시 |
-
-### `travel_items` — Day별 활동
-
-| 컬럼명 | 타입 | 설명 |
-| :--- | :--- | :--- |
-| `id` | Primary Key | — |
-| `plan_id` | `uuid` | `travel_plans.id` 참조 |
-| `day_number` | `int` | 몇 일차 |
-| `visit_time` | `time` | 방문 시각 |
-| `place_name` | `text` | 실제 상호명 |
-| `category` | `text` | 관광 / 맛집 / 카페 / 쇼핑 / 숙소 / 이동 |
-| `sequence` | `int` | 같은 day 안에서의 순서 |
-| `is_must_visit` | `boolean` | 필수 방문 여부 |
-| `image_url` | `text` | 실제 장소 사진 URL |
-
-전체 컬럼 목록, `users`/`profiles` 테이블, RLS 정책과 알려진 이상 지점(중복 프로필 테이블, 컬럼명 오타 등)은 [docs/DATABASE.md](docs/DATABASE.md)에 정리했습니다.
+| 항목 | 값 |
+| :--- | :--- |
+| 실측 응답 시간 | 12~20초 (3박 4일 기준) |
+| 일정 1건당 AI 호출 | 2회 |
+| 서버 예산 상한 | 25초 |
 
 ---
 
-## 🖥️ 주요 화면 구조
+## 주요 기능
 
-1.  **로그인 / 회원가입 화면**
-    *   이메일, 비밀번호 입력을 통한 인증 처리 및 화면 전환
-2.  **홈 화면 (대시보드)**
-    *   사용자 맞춤 환영 메시지 제공
-    *   [새 여행 만들기] 및 [내 여행 보러가기] 핵심 CTA 버튼 배치
-3.  **여행 조건 입력 화면 (설문형)**
-    *   여행지 입력, 날짜 선택, 예산 설정, 동행자 선택
-    *   원클릭 선호 스타일 키워드 태그 선택 및 필수 방문 장소 텍스트 입력
-4.  **AI 일정 생성 결과 화면**
-    *   시간순 Day별 일정 리스트 뷰 및 지도 연결 링크 제공
-    *   저장하기 및 피드백 수정 요청 입력 창 제공
-5.  **마이페이지 (내 여행 보관함)**
-    *   저장된 여행 목록을 카드 형태로 시각화하여 제공
-    *   상세 보기 클릭 시 상세 일정 뷰어로 이동
+<table>
+<tr><td width="50%" valign="top">
+
+### 🔎 조건 입력
+초성 검색 지원 — `ㅅ` 한 글자로 서울·속초·수원이 뜹니다.<br/>
+날짜, 동행, 예산, 취향, 이동수단, 필수 방문지를 지정합니다.
+
+### 🗺️ 일정 생성
+일차별 지도에 방문 순서가 번호로 찍힙니다.<br/>
+장소마다 실제 주소와 지도 링크가 붙습니다.
+
+</td><td width="50%" valign="top">
+
+### 💬 자연어 수정
+"마지막날은 4시에 끝내줘" 같은 문장을 조건으로 바꿔 재생성합니다.<br/>
+반영하지 못한 요청은 반영한 척하지 않고 그대로 알립니다.
+
+### 💾 보관 및 공유
+Supabase에 사용자별로 저장되고 RLS로 격리됩니다.<br/>
+공유 링크(`/trip/:id`)로 동행자에게 전달합니다.
+
+</td></tr>
+</table>
 
 ---
 
-## ⚙️ 로컬 실행 및 설정 방법
+## 직접 구현한 것
 
-### 1. 프로젝트 복사
+<details open>
+<summary>초성 검색 — 라이브러리 없이 유니코드 분해</summary>
+
+<br/>
+
+한글 완성형 음절에서 초성 인덱스를 직접 계산합니다.
+
+```ts
+const HANGUL_BASE = 0xac00;              // '가'
+const JONGSEONG_COUNT = 28;
+const JUNGSEONG_COUNT = 21;
+
+// 음절 코드에서 초성 인덱스를 역산한다
+const index = Math.floor((code - HANGUL_BASE) / (JUNGSEONG_COUNT * JONGSEONG_COUNT));
+```
+
+완전일치 → 접두 → 포함 → 초성 순으로 순위를 매겨 정렬합니다.<br/>
+`src/lib/destinations.ts`
+
+</details>
+
+<details>
+<summary>무료 티어 안에서 도는 호출 설계 — 하루 5건에서 20건으로</summary>
+
+<br/>
+
+Gemini 무료 한도는 모델·프로젝트당 하루 20회입니다. 일정 1건에 `1 + 일수`회를 쓰던 구조라 다섯 건이면 바닥났습니다.
+
+| | 이전 | 현재 |
+| :--- | :--- | :--- |
+| 일정 1건당 호출 | 4회 (3박 기준) | 2회 |
+| 하루 생성 가능 | 5건 | 20건 |
+| 한도 소진 시 | 500, 25초 소모 | 429, 0.55초 |
+
+설명 생성을 일차별에서 여행 전체 배치로 합치고, 후보 추출(`flash`)과 설명(`flash-lite`)의 모델을 나눠 한도 버킷을 분리했습니다.
+
+</details>
+
+<details>
+<summary>실패를 숨기지 않는 에러 설계</summary>
+
+<br/>
+
+AI 실패 시 정적 데이터로 그럴듯한 일정을 만들어 200으로 돌려주던 폴백을 제거했습니다. 실재하지 않는 일정을 보여주는 것보다 실패를 드러내는 편이 낫다고 판단했습니다.
+
+| 상태 | 코드 | 상황 |
+| :--- | :--- | :--- |
+| `422` | `NOT_ENOUGH_PLACES` | 조건이 좁아 장소가 부족 |
+| `429` | `AI_QUOTA_EXCEEDED` | 무료 한도 소진 (재시도 시각 안내) |
+| `503` | `SERVICE_NOT_CONFIGURED` | 배포 환경변수 누락 |
+
+</details>
+
+---
+
+## 기술 스택
+
+| 영역 | 사용 | 선택 이유 |
+| :--- | :--- | :--- |
+| 프론트엔드 | React · TypeScript · Vite | 화면 6개라 라우터 대신 상태 스택으로 전환 |
+| 스타일 | Tailwind CSS 4 | 디자인 토큰은 `docs/DESIGN.md`에 고정 |
+| 인증 · DB | Supabase (Auth + PostgreSQL) | anon key + RLS 전제 설계라 서버 경유 없이 직접 호출 |
+| AI | Gemini 2.5 Flash / Flash-Lite | 한도가 모델별이라 두 단계의 버킷을 분리 |
+| 장소 검증 | Kakao Local API | 국내 POI 정확도. 상호명 대조로 환각 차단 |
+| 서버 | Express (로컬) · Netlify Functions (운영) | 공통 로직은 `server/itinerary/`에 단일화 |
+| 테스트 | Vitest — 18파일 251개 | 파이프라인 전 단계 + 목적지 검색 |
+
+---
+
+## 시작하기
+
 ```bash
 git clone https://github.com/jjssspark/TripMate.git
 cd TripMate
-```
-
-### 2. 패키지 설치
-```bash
 npm install
+cp .env.example .env    # 아래 표를 참고해 값을 채웁니다
+npm run dev             # http://localhost:3000
 ```
 
-### 3. 환경 변수 설정
-템플릿을 복사한 뒤 실제 값을 채웁니다. 각 키의 발급처와 클라이언트 노출 여부는 [`.env.example`](.env.example)에 주석으로 정리돼 있습니다.
+### 환경변수
 
-```bash
-cp .env.example .env
-```
-
-| 키 | 노출 범위 | 필수 | 용도 |
-| :--- | :--- | :--- | :--- |
+| 키 | 노출 | 필수 | 용도 |
+| :--- | :---: | :---: | :--- |
 | `VITE_SUPABASE_URL` | 클라이언트 | ✅ | Supabase 프로젝트 URL |
-| `VITE_SUPABASE_ANON_KEY` | 클라이언트 | ✅ | Supabase anon public key (RLS 보호) |
-| `GEMINI_API_KEY` | 서버 전용 | ✅ | AI 후보 추출·설명 생성 |
-| `KAKAO_REST_API_KEY` | 서버 전용 | ✅ | 장소 실재 검증·좌표 조회 |
-| `GOOGLE_PLACES_API_KEY` | 서버 전용 | — | 장소 사진 조회. 없으면 카테고리별 목업 이미지를 씁니다 |
-| `PORT` | 서버 전용 | — | 로컬 dev 서버 포트 (기본 3000) |
+| `VITE_SUPABASE_ANON_KEY` | 클라이언트 | ✅ | anon public key (RLS로 보호) |
+| `GEMINI_API_KEY` | 서버 | ✅ | 후보 추출 · 설명 생성 |
+| `KAKAO_REST_API_KEY` | 서버 | ✅ | 장소 실재 검증 · 좌표 조회 |
+| `GOOGLE_PLACES_API_KEY` | 서버 | — | 장소 사진. 없으면 목업 이미지 |
+| `PORT` | 서버 | — | 로컬 포트 (기본 3000) |
 
-> `VITE_` 접두사가 붙은 값은 브라우저 번들에 그대로 포함됩니다. Gemini·Kakao·Places 키는 접두사 없이 두어 서버에만 남도록 했습니다.
+> [!IMPORTANT]
+> `KAKAO_REST_API_KEY`는 선택이 아닙니다. 파이프라인 2단계가 이 키로 실재 검증을 하며, 없으면 통과하는 장소가 0건이 되어 일정 생성이 통째로 실패합니다. 배포 환경에도 반드시 등록하세요.
 
-> `KAKAO_REST_API_KEY`는 선택이 아니라 필수입니다. 파이프라인 2단계(실재 검증)가 이 키로 카카오 로컬 API를 호출하며, 키가 없으면 검증을 통과하는 장소가 0건이 되어 일정 생성 전체가 실패합니다. 배포 환경에도 반드시 등록해야 합니다.
-
-> 코드는 `GEMINI_API_KEY`가 없으면 `VITE_GEMINI_API_KEY`도 읽습니다(`server/itinerary/runner.ts:45`). 배포 플랫폼에 이미 `VITE_` 이름으로 등록해 둔 경우를 위한 호환 경로이며, 이 값은 서버에서만 참조되므로 클라이언트 번들에는 들어가지 않습니다. 새로 설정한다면 접두사 없는 이름을 쓰세요.
-
-### 4. 로컬 서버 실행
-```bash
-npm run dev        # Express + Vite 개발 서버 (http://localhost:3000)
-```
+> [!NOTE]
+> `VITE_` 접두사가 붙은 값은 브라우저 번들에 그대로 포함됩니다. Gemini·Kakao·Places 키는 접두사 없이 두어 서버에만 남깁니다.
 
 ### 그 외 명령어
+
 ```bash
 npm run build      # 프로덕션 빌드 (dist/)
-npm run typecheck  # 타입 검사
+npm run typecheck  # tsc --noEmit
+npm test           # Vitest
 npm run lint       # ESLint
 ```
 
 ---
 
-## 📁 프로젝트 구조
+## 프로젝트 구조
 
 ```
-├── index.html            React 앱 진입점
-├── landing.html          랜딩 페이지 (React 미포함, /로 서빙)
 ├── src/
-│   ├── components/       화면 단위 컴포넌트 11개
-│   ├── lib/              Supabase 클라이언트, 일정 표시 유틸
-│   └── types.ts          공용 타입
-├── server/server.ts      로컬 개발용 Express + Vite 미들웨어
-├── netlify/functions/    운영용 서버리스 API 4종
-├── public/               정적 자산 (favicon, PWA 아이콘)
+│   ├── components/          화면 단위 컴포넌트
+│   └── lib/                 Supabase 클라이언트, 초성 검색, 표시 유틸
+├── server/
+│   ├── itinerary/           ★ 파이프라인 — 로컬·운영이 공유
+│   │   ├── candidates.ts      ① 후보 추출
+│   │   ├── routing.ts         ③④ 날짜 배정 · 순서 결정
+│   │   ├── schedule.ts        ⑤ 시각 배치 · 식사 삽입
+│   │   ├── narrate.ts         ⑥ 설명 생성
+│   │   ├── intent.ts          자연어 수정 요청 분류
+│   │   └── quota.ts           무료 한도 판별
+│   ├── places/kakao.ts      ② 실재 검증
+│   └── server.ts            로컬 개발 서버 (Express)
+├── netlify/functions/       운영 API — 위 파이프라인을 호출하는 얇은 어댑터
+├── tests/                   251개
 └── docs/
-    ├── ARCHITECTURE.md   구조와 설계 판단 근거
-    └── DESIGN.md         디자인 토큰
 ```
 
-구조와 설계 의도는 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)에 정리했습니다.
+---
+
+## 데이터베이스
+
+```
+auth.users ──< users ──< travel_plans ──< travel_items
+```
+
+일정 메타데이터(`travel_plans`)와 Day별 활동(`travel_items`)을 분리했습니다. 하나의 `jsonb` 컬럼에 몰아넣지 않았습니다.
+
+<details>
+<summary>주요 컬럼 보기</summary>
+
+<br/>
+
+`travel_plans` — 일정 메타데이터
+
+| 컬럼 | 타입 | 설명 |
+| :--- | :--- | :--- |
+| `id` | `uuid` | Primary Key |
+| `user_seq` | `int` | `users.user_seq` 참조 |
+| `destination` | `text` | 목적지 |
+| `start_date` / `end_date` | `date` | 여행 기간 |
+| `styles` | `text[]` | 선호 스타일 |
+| `must_visit_places` | `text[]` | 필수 방문지 |
+| `is_shared` | `boolean` | 공유 링크 공개 여부 |
+
+`travel_items` — Day별 활동
+
+| 컬럼 | 타입 | 설명 |
+| :--- | :--- | :--- |
+| `plan_id` | `uuid` | `travel_plans.id` 참조 |
+| `day_number` | `int` | 몇 일차 |
+| `visit_time` | `time` | 방문 시각 |
+| `place_name` | `text` | 실제 상호명 |
+| `sequence` | `int` | 같은 날 안에서의 순서 |
+
+전체 컬럼, RLS 정책, 알려진 이상 지점은 [docs/DATABASE.md](docs/DATABASE.md)에 있습니다.
+
+</details>
 
 ---
 
-## 🌐 배포 (Netlify)
+## 기록
 
-본 프로젝트는 **Netlify**를 통해 배포 및 지속적 통합(CI/CD)이 관리됩니다.
-*   빌드 명령어: `npm run build`
-*   빌드 디렉토리: `dist`
-*   환경변수 주입: Netlify Dashboard → Site settings → Environment variables
-*   `/api/*` 요청은 `netlify.toml`의 리다이렉트 규칙에 따라 서버리스 함수로 전달됩니다.
+혼자 만든 프로젝트라 판단을 검토해 줄 사람이 없었습니다. 대신 결정할 때마다 이유를 남겼고, 한 달 뒤 그 문서를 근거로 두 건을 스스로 뒤집었습니다.
+
+| 문서 | 내용 |
+| :--- | :--- |
+| [ADR](https://app.notion.com/p/ADR-3b1f6f1e619a80fdb329cde5988f01e0?source=copy_link) | 결정 6건 — 고려한 대안, 근거, 실제 결과, 뒤집힌 판단 |
+| [트러블슈팅](https://app.notion.com/p/3b1f6f1e619a80aeb0a8fbc1532d0f73?source=copy_link) | 사고 6건 — 재현 조건, 틀렸던 가설, 검증 로그 |
+| [ARCHITECTURE.md](docs/ARCHITECTURE.md) | 구조와 설계 판단 근거 |
+| [API.md](docs/API.md) | 엔드포인트 계약과 에러 코드 |
+| [PERFORMANCE.md](docs/PERFORMANCE.md) | 번들 크기, 단계별 실측 |
+
+### 특히 오래 붙잡은 것
+
+응답 지연 문제를 한 달 반 동안 네 번 만났습니다. thinking 모드, 코드 중복, 예산 배분, 무료 한도 — 매번 다른 증상처럼 보였지만 뿌리는 하나였습니다. 사용자 요청 하나가 AI 응답 하나에 통째로 묶여 있다는 것.
+
+네 번째에 와서야 위층을 봤습니다. 호출 횟수는 성능 지표가 아니라 제약 조건이었습니다.
 
 ---
 
-## 📄 라이선스
+## 알려진 한계
 
-[MIT](LICENSE)
+| 한계 | 이유 |
+| :--- | :--- |
+| 휴업·폐업 중인 장소가 섞일 수 있음 | 카카오 Local API에 영업 상태 필드가 없음. Google Places `business_status`가 정공법이나 결제 계정이 필요 |
+| 후보 추출 시간이 2.7~11.4초로 흔들림 | 튀는 날은 설명이 강등됨. 근본 해결은 비동기 구조 |
+| 장소 사진이 목업 이미지 | Maps Platform 결제 계정 미등록. 키만 넣으면 코드 수정 없이 전환 |
 
-## Troubleshooting_요약
-- 조용한 실패 두 건 : 빌드는 성공했지만 PWA 아이콘이 통째로 누락됐던 `publicDir` 설정 오류, AI 응답 지연 시 사용자 모르게 목업 일정이 나가던 타임아웃 예산 버그 — 둘 다 "에러가 없다"는 게 오히려 함정이었습니다.
-- 인프라 이슈 진단 : Supabase 무료 플랜 자동 일시정지로 전 기능이 `Failed to fetch`로 죽었던 사고를 DNS 계층부터 추적해 원인을 좁혔습니다.
-- 전체 5건(재현 조건·틀렸던 가설·검증 로그 포함)은 [노션 문서][https://app.notion.com/p/3b1f6f1e619a80aeb0a8fbc1532d0f73?source=copy_link]에 정리했습니다.
+고칠 수 있는데 안 한 것과, 지금 구조로는 못 하는 것을 구분해 적었습니다.
 
+---
 
-## ADR 요약
-- 일정 생성을 6단계 검증 파이프라인으로 분리: Gemini 단일 호출로 일정 전체를 받던 구조를 후보 제안(Gemini) → 실재 검증(Kakao) → 날짜 배정(k-means) → 순서 결정(TSP) → 시각 배치 → 설명 작성(Gemini)으로 나눴습니다. 중복과 동선을 프롬프트 문장이 아니라 코드가 강제합니다.
-- 실패 시 가짜 일정을 내보내던 폴백 제거: 실재하지 않는 일정을 그럴듯하게 보여주는 것보다 실패를 드러내는 편이 낫다고 판단했습니다. 대신 실패 종류를 나눠 안내합니다 — 장소 부족 422, AI 무료 한도 소진 429(재시도 시각 포함).
-- 무료 티어 안에서 동작하도록 호출 횟수 축소: 무료 한도가 모델·프로젝트당 하루 20회라 일정 1건에 4회를 쓰면 다섯 건이면 소진됩니다. 설명 생성을 일차별 호출에서 여행 전체 1회 배치로 합쳐 건당 2회로 줄였습니다. thinking 모드는 두 호출 모두 꺼 둡니다.
-- 장소 사진은 카테고리별 목업 이미지 사용: Google Places 프록시(`/api/place-photo`)를 구현해 두었으나 Maps Platform이 결제 계정 등록을 요구해 운영에서는 키를 두지 않습니다. 키가 없으면 목업으로 내려가도록 설계돼 있습니다.
-- 전체 결정 과정(고려한 대안, 근거, 실제 결과)은 [노션 ADR 문서](https://app.notion.com/p/ADR-3b1f6f1e619a80fdb329cde5988f01e0?source=copy_link)에 정리했습니다.
+<div align="center">
+
+[MIT](LICENSE) · [jjssspark](https://github.com/jjssspark)
+
+</div>

@@ -17,7 +17,8 @@
 - 응답속도(파이프라인 교체 후 로컬 실측 7.2초), 단위 테스트 201개 통과, Lighthouse Performance 61점(이전 파이프라인 기준, 재측정 필요) → GitHub `docs/PERFORMANCE.md`
 - 트러블슈팅 6건 상세(재현 조건·틀렸던 가설·검증 로그) → 노션 트러블슈팅 문서
 - ADR 6건 상세(고려한 대안·근거·실제 결과·뒤집힌 판단) → 노션 ADR 문서
-- 나머지 스크린샷 6장(02~07), 데모 영상 전체(`output/video/demo-full.mp4`) → GitHub README
+- 나머지 스크린샷 6장(02~07) → GitHub README
+- 데모 영상 전체 → 유튜브 호스팅([R79fwGeFfRU](https://youtu.be/R79fwGeFfRU)). README 상단에 썸네일로 걸고 저장소에는 두지 않는다
 
 ## 왜 이렇게 나눴는가
 
