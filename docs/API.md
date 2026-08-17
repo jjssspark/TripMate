@@ -144,47 +144,62 @@ Gemini 무료 티어는 모델·프로젝트당 하루 20회입니다. 일정 1�
 
 ## `POST /api/revise-plan`
 
-기존 일정(`planContent`)과 자연어 피드백을 받아 Gemini로 재생성합니다. 인증 불필요.
+기존 일정(`planContent`)과 자연어 피드백을 받아 파이프라인을 다시 실행합니다. 인증 불필요.
 
-**Request Body**
+**Request Body** — `generate-plan`과 같은 조건 필드에 아래 둘을 더합니다.
 
 ```ts
 {
-  destination: string;    // 필수
+  destination: string;     // 필수
   planContent: Array<...>; // 필수. generate-plan 응답의 planContent와 동일 구조
-  feedback: string;        // 필수. 예: "맛집 위주로 바꿔줘"
-  budget?: string;
-  companion?: string;
+  feedback: string;        // 필수. 예: "마지막날은 오후 4시에 끝내줘"
+  // startDate, endDate, intensity, transportMode, styles, mustVisitPlaces … generate-plan과 동일
 }
 ```
+
+**피드백이 실제로 반영되는 항목**
+
+피드백은 경량 모델(`gemini-2.5-flash-lite`)이 아래 조건으로 옮긴 뒤 파이프라인에 넘어갑니다. 여기 없는 요청은 후보 추출 프롬프트에 힌트로만 실리고 결과를 바꾸지 못합니다.
+
+| 항목 | 예시 문구 | 반영되는 곳 |
+|---|---|---|
+| 일정 강도 | "좀 더 여유롭게" | `intensity` — 하루 활동 개수 |
+| 이동수단 | "차 없이 다닐래" | `transportMode` — 이동 시간 계산 |
+| 선호 스타일 | "카페 더 넣어줘" | `styles` — 후보 추출 조건 |
+| 필수 방문지 | "우도도 가고 싶어" | `mustVisitPlaces` — 코드가 직접 채워 넣음 |
+| 장소 전체 교체 | "전부 다른 곳으로" | `excludeNames` — 이전 장소 전부 배제 |
+| 일부 장소 제외 | "성산일출봉 빼줘" | `excludeNames` — 그 장소만 배제 |
+| 종료 시각 | "마지막날은 4시에 끝내줘" | `dayEndLimits` — 일차별 관광 상한 |
 
 **Response 200 (성공)**
 
 ```ts
-{ success: true; planContent: Array<...> }  // generate-plan과 동일한 day 배열 구조
+{
+  success: true,
+  planContent: Array<...>,      // generate-plan과 동일한 day 배열 구조
+  narrationDegraded: boolean,
+  applied: string[],            // 실제로 반영된 항목 이름. 예: ["일정 강도", "종료 시각"]
+}
 ```
 
-**Response 200 (실패 — 이 엔드포인트도 실패 시 상태 코드는 200)**
+`applied`가 빈 배열이면 **피드백을 조건으로 옮기지 못한 것**입니다. 파이프라인은 조건이 같으면 같은 결과를 내므로, 이때 "수정했다"고 안내하면 사용자는 요청이 무시된 걸 알 방법이 없습니다. 클라이언트는 이 경우 무엇을 바꿀 수 있는지 대신 안내합니다.
 
-```ts
-{ success: false; message: "AI가 피드백을 반영하는 데 실패했습니다. 잠시 후 다시 시도해 주세요." }
-{ success: false; message: "AI 서버가 설정되지 않아 피드백을 반영할 수 없습니다." }  // API 키 미설정
-```
+**실패 응답**
 
-**Response 400**
+`generate-plan`과 같은 봉투와 상태 코드를 씁니다.
 
-```ts
-{ success: false; message: "destination, planContent, feedback가 모두 필요합니다." }
-{ success: false; message: "Invalid JSON body" }
-```
+| 상태 | code | 상황 |
+|---|---|---|
+| 400 | `REVISE_INPUT_INVALID` | `planContent`가 배열이 아니거나 `feedback`이 빈 문자열 |
+| 400 | `INVALID_JSON` | 본문이 JSON이 아님 |
+| 400 | `DESTINATION_REQUIRED` 외 | `generate-plan`의 입력 검증과 동일 |
+| 405 | `METHOD_NOT_ALLOWED` | POST가 아님 |
+| 422 | `NOT_ENOUGH_PLACES` | 제외 후 남은 장소가 강도 하한에 미달 |
+| 429 | `AI_QUOTA_EXCEEDED` | 무료 한도 소진 |
+| 500 | `PLAN_REVISION_FAILED` | 그 밖의 서버 오류 |
+| 503 | `SERVICE_NOT_CONFIGURED` | 필수 API 키 미설정 |
 
-**Response 405**
-
-```ts
-{ success: false; message: "Method Not Allowed" }
-```
-
-> **주의**: `generate-plan`은 실패 응답에 `error` 필드를, `revise-plan`은 실패 응답에 `success`/`message` 필드를 씁니다. 같은 프로젝트 안에서도 엔드포인트마다 에러 모양이 다릅니다 — "알려진 편차" 절 참고.
+> **의도 분류 실패는 오류가 아닙니다.** 분류 호출이 실패하거나 빈 결과를 내면 키워드 판정(`server/itinerary/revise.ts`)으로 받치고, 그마저 못 건지면 조건 없이 재생성합니다. 사용자에게 "수정할 수 없다"고 돌려보내는 것보다 낫다고 봤습니다. 대신 `applied`가 비어 그 사실이 드러납니다.
 
 ---
 
