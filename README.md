@@ -48,11 +48,11 @@ LLM에게 여행 일정을 통째로 맡기면 세 가지가 깨집니다.
 
 ```mermaid
 flowchart LR
-    A["① 후보 추출<br/><sub>Gemini</sub>"] --> B["② 실재 검증<br/><sub>Kakao Local</sub>"]
-    B --> C["③ 날짜 배정<br/><sub>k-means</sub>"]
-    C --> D["④ 순서 결정<br/><sub>TSP</sub>"]
-    D --> E["⑤ 시각 배치<br/><sub>이동시간·식사</sub>"]
-    E --> F["⑥ 설명 작성<br/><sub>Gemini</sub>"]
+    A["① 후보 추출<br/>Gemini"] --> B["② 실재 검증<br/>Kakao"]
+    B --> C["③ 날짜 배정<br/>k-means"]
+    C --> D["④ 순서 결정<br/>TSP"]
+    D --> E["⑤ 시각 배치<br/>이동·식사"]
+    E --> F["⑥ 설명 작성<br/>Gemini"]
 
     style A fill:#8e75b2,color:#fff,stroke:none
     style F fill:#8e75b2,color:#fff,stroke:none
