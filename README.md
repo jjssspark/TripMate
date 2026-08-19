@@ -47,12 +47,13 @@ LLM에게 여행 일정을 통째로 맡기면 세 가지가 깨집니다.
 ## 일정 생성 파이프라인
 
 ```mermaid
+%%{init: {"flowchart": {"htmlLabels": false, "nodeSpacing": 40, "padding": 14}}}%%
 flowchart LR
-    A["① 후보 추출<br/>Gemini"] --> B["② 실재 검증<br/>Kakao"]
-    B --> C["③ 날짜 배정<br/>k-means"]
-    C --> D["④ 순서 결정<br/>TSP"]
-    D --> E["⑤ 시각 배치<br/>이동·식사"]
-    E --> F["⑥ 설명 작성<br/>Gemini"]
+    A["① 후보 추출"] -->|Gemini| B["② 실재 검증"]
+    B -->|Kakao| C["③ 날짜 배정"]
+    C -->|k-means| D["④ 순서 결정"]
+    D -->|TSP| E["⑤ 시각 배치"]
+    E -->|이동·식사| F["⑥ 설명 작성"]
 
     style A fill:#8e75b2,color:#fff,stroke:none
     style F fill:#8e75b2,color:#fff,stroke:none
