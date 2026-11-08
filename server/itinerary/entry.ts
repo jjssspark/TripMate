@@ -2,6 +2,20 @@ import type { Intensity, TransportMode } from "./types";
 import type { PlanRequest } from "./pipeline";
 
 export const MAX_DAYS = 14;
+
+/**
+ * 수정 요청에 실려 온 이전 일정에서 장소 이름만 모은다. 클라이언트가 보낸 JSON이라
+ * 모양을 믿지 않고 문자열 제목만 집어 온다. 로컬 서버와 Netlify 함수가 같이 쓴다.
+ */
+export function collectPlaceNames(planContent: unknown[]): string[] {
+  return planContent.flatMap((day) => {
+    const activities = (day as { activities?: unknown })?.activities;
+    if (!Array.isArray(activities)) return [];
+    return activities
+      .map((act) => (act as { title?: unknown })?.title)
+      .filter((title): title is string => typeof title === "string");
+  });
+}
 const DEFAULT_DAYS = 3;
 const DAY_MS = 86_400_000;
 

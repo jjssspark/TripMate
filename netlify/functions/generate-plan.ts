@@ -4,6 +4,7 @@ import { parsePlanInput } from "../../server/itinerary/entry";
 import { NotEnoughPlacesError } from "../../server/itinerary/pipeline";
 import { QuotaExceededError } from "../../server/itinerary/quota";
 import { ConfigMissingError } from "../../server/itinerary/config";
+import type { NetlifyEvent } from "../../server/http/netlify";
 
 const headers = {
   "Access-Control-Allow-Origin": "*",
@@ -16,11 +17,11 @@ const fail = (statusCode: number, code: string, message: string, field: string |
   body: JSON.stringify({ success: false, data: null, error: { code, message, field } }),
 });
 
-export const handler = async (event: any) => {
+export const handler = async (event: NetlifyEvent) => {
   if (event.httpMethod === "OPTIONS") return { statusCode: 200, headers, body: "" };
   if (event.httpMethod !== "POST") return fail(405, "METHOD_NOT_ALLOWED", "지원하지 않는 요청입니다.");
 
-  let body: any;
+  let body: Record<string, unknown>;
   try {
     body = JSON.parse(event.body || "{}");
   } catch {

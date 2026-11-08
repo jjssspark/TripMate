@@ -1,9 +1,10 @@
 import { runRevision } from "../../server/itinerary/runner";
 import { attachPhotos } from "../../server/places/photos";
-import { parsePlanInput } from "../../server/itinerary/entry";
+import { parsePlanInput, collectPlaceNames } from "../../server/itinerary/entry";
 import { NotEnoughPlacesError } from "../../server/itinerary/pipeline";
 import { QuotaExceededError } from "../../server/itinerary/quota";
 import { ConfigMissingError } from "../../server/itinerary/config";
+import type { NetlifyEvent } from "../../server/http/netlify";
 
 // -------------------------------------------------------------
 // Netlify Function Handler — 수정은 요청 조건에 피드백을 병합해 파이프라인을 다시 실행
@@ -19,11 +20,11 @@ const fail = (statusCode: number, code: string, message: string, field: string |
   body: JSON.stringify({ success: false, data: null, error: { code, message, field } }),
 });
 
-export const handler = async (event: any) => {
+export const handler = async (event: NetlifyEvent) => {
   if (event.httpMethod === "OPTIONS") return { statusCode: 200, headers, body: "" };
   if (event.httpMethod !== "POST") return fail(405, "METHOD_NOT_ALLOWED", "지원하지 않는 요청입니다.");
 
-  let body: any;
+  let body: Record<string, unknown>;
   try {
     body = JSON.parse(event.body || "{}");
   } catch {
@@ -43,9 +44,7 @@ export const handler = async (event: any) => {
   const destination = request.destination;
 
   // 장소를 바꿔 달라는 피드백일 때만 이전 장소를 제외 지시로 넘긴다.
-  const previousNames: string[] = planContent.flatMap((d: any) =>
-    Array.isArray(d.activities) ? d.activities.map((a: any) => a.title) : [],
-  );
+  const previousNames = collectPlaceNames(planContent);
 
   try {
     const { planContent: revised, narrationDegraded, applied } = await runRevision(

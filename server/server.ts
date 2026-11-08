@@ -12,7 +12,7 @@ import { createServer as createViteServer } from "vite";
 import dotenv from "dotenv";
 import { runPipeline, runRevision } from "./itinerary/runner";
 import { attachPhotos, getMockupImage } from "./places/photos";
-import { parsePlanInput } from "./itinerary/entry";
+import { parsePlanInput, collectPlaceNames } from "./itinerary/entry";
 import { NotEnoughPlacesError } from "./itinerary/pipeline";
 import { QuotaExceededError } from "./itinerary/quota";
 import { ConfigMissingError } from "./itinerary/config";
@@ -45,8 +45,22 @@ if (!fs.existsSync(DB_PATH)) {
   fs.writeFileSync(DB_PATH, JSON.stringify([], null, 2), "utf8");
 }
 
+// 로컬 개발용 파일 DB에 들어가는 일정. 브라우저가 보낸 TravelPlan을 그대로 저장하므로
+// 필드를 전부 알 필요는 없고, 서버가 직접 읽고 쓰는 것만 적는다.
+type StoredActivity = { category: string; imageUrl?: string } & Record<string, unknown>;
+type StoredDay = { activities?: StoredActivity[] } & Record<string, unknown>;
+type StoredPlan = {
+  id?: string;
+  userId?: string;
+  title?: string;
+  destination: string;
+  createdAt?: string;
+  updatedAt?: string;
+  planContent?: StoredDay[];
+} & Record<string, unknown>;
+
 // Read helper
-function readPlans(): any[] {
+function readPlans(): StoredPlan[] {
   try {
     const raw = fs.readFileSync(DB_PATH, "utf8");
     return JSON.parse(raw);
@@ -57,7 +71,7 @@ function readPlans(): any[] {
 }
 
 // Write helper
-function writePlans(plans: any[]) {
+function writePlans(plans: StoredPlan[]) {
   try {
     fs.writeFileSync(DB_PATH, JSON.stringify(plans, null, 2), "utf8");
   } catch (err) {
@@ -87,8 +101,8 @@ app.get("/api/plans", (req, res) => {
 });
 
 // 2. Save a new travel plan (여행 저장)
-app.post("/api/plans", (express.json() as any), (req, res) => {
-  const plan = req.body;
+app.post("/api/plans", express.json(), (req, res) => {
+  const plan: StoredPlan = req.body;
   if (!plan.userId || !plan.title || !plan.destination) {
     return res.status(400).json({ error: "Missing required plan fields (userId, title, destination)" });
   }
@@ -106,9 +120,9 @@ app.post("/api/plans", (express.json() as any), (req, res) => {
 
   // Enhance activities with nice stock images if missing
   if (Array.isArray(plan.planContent)) {
-    plan.planContent = plan.planContent.map((dayObj: any) => {
+    plan.planContent = plan.planContent.map((dayObj) => {
       if (Array.isArray(dayObj.activities)) {
-        dayObj.activities = dayObj.activities.map((act: any, idx: number) => {
+        dayObj.activities = dayObj.activities.map((act, idx) => {
           if (!act.imageUrl) {
             act.imageUrl = getMockupImage(act.category, plan.destination, idx);
           }
@@ -252,9 +266,7 @@ app.post("/api/revise-plan", async (req, res) => {
   const destination = request.destination;
 
   // 장소를 바꿔 달라는 피드백일 때만 이전 장소를 제외 지시로 넘긴다.
-  const previousNames: string[] = planContent.flatMap((d: any) =>
-    Array.isArray(d.activities) ? d.activities.map((a: any) => a.title) : [],
-  );
+  const previousNames = collectPlaceNames(planContent);
 
   try {
     const { planContent: revised, narrationDegraded, applied } = await runRevision(

@@ -16,7 +16,7 @@ function googlePlacesApiKey(): string {
   return process.env.GOOGLE_PLACES_API_KEY || "";
 }
 
-export function fetchJsonHttps(url: string): Promise<any> {
+export function fetchJsonHttps(url: string): Promise<unknown> {
   return new Promise((resolve, reject) => {
     https.get(url, (res) => {
       let data = "";
@@ -37,7 +37,7 @@ export function fetchJsonHttps(url: string): Promise<any> {
 export async function fetchRealPlacePhotoRef(
   placeName: string,
   destination: string,
-  fetchJson: (url: string) => Promise<any> = fetchJsonHttps,
+  fetchJson: (url: string) => Promise<unknown> = fetchJsonHttps,
 ): Promise<string | null> {
   const key = googlePlacesApiKey();
   if (!key) return null;
@@ -47,7 +47,11 @@ export async function fetchRealPlacePhotoRef(
     const url = `https://maps.googleapis.com/maps/api/place/findplacefromtext/json?input=${encodeURIComponent(
       query
     )}&inputtype=textquery&fields=photos&key=${key}`;
-    const data = await fetchJson(url);
+    // Places 응답에서 쓰는 건 첫 후보의 첫 사진 참조뿐이라 그 경로만 타입으로 적는다.
+    const data = (await fetchJson(url)) as
+      | { candidates?: Array<{ photos?: Array<{ photo_reference?: string }> }> }
+      | null
+      | undefined;
     const photoRef = data?.candidates?.[0]?.photos?.[0]?.photo_reference;
     return photoRef || null;
   } catch (err) {

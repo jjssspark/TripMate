@@ -1,4 +1,5 @@
 import https from "https";
+import type { NetlifyEvent } from "../../server/http/netlify";
 
 // Google Place Photo는 실제 이미지 CDN으로 302 리다이렉트를 반환하므로 한 번 더 따라간다.
 function fetchBinary(url: string): Promise<{ data: Buffer; contentType: string }> {
@@ -38,7 +39,7 @@ function fetchBinary(url: string): Promise<{ data: Buffer; contentType: string }
 
 // Google Places API 키를 클라이언트에 절대 노출하지 않기 위한 서버 프록시.
 // 프론트엔드는 이 엔드포인트의 URL만 <img src>로 사용하고, 실제 키는 여기서만 사용된다.
-export const handler = async (event: any) => {
+export const handler = async (event: NetlifyEvent) => {
   const ref = event.queryStringParameters?.ref;
   const maxwidth = event.queryStringParameters?.maxwidth || "400";
 
@@ -66,7 +67,7 @@ export const handler = async (event: any) => {
       body: data.toString("base64"),
       isBase64Encoded: true,
     };
-  } catch (err: any) {
+  } catch (err) {
     console.error("Place photo fetch failed:", err);
     return { statusCode: 502, body: "Failed to fetch photo" };
   }

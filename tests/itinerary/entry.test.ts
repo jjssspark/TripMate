@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parsePlanInput, MAX_DAYS } from "../../server/itinerary/entry";
+import { parsePlanInput, MAX_DAYS, collectPlaceNames } from "../../server/itinerary/entry";
 
 describe("parsePlanInput", () => {
   it("유효한 날짜 범위면 정확한 일수를 계산한다", () => {
@@ -109,5 +109,17 @@ describe("parsePlanInput", () => {
     const result = parsePlanInput({ destination: "  제주도  " });
     expect(result.ok).toBe(true);
     if (result.ok) expect(result.value.request.destination).toBe("제주도");
+  });
+});
+
+describe("collectPlaceNames", () => {
+  it("일차별 활동에서 문자열 제목만 모은다", () => {
+    const names = collectPlaceNames([
+      { activities: [{ title: "해운대해수욕장" }, { title: 42 }, {}] },
+      { activities: "잘못된 값" },
+      null,
+      { activities: [{ title: "광안대교" }] },
+    ]);
+    expect(names).toEqual(["해운대해수욕장", "광안대교"]);
   });
 });

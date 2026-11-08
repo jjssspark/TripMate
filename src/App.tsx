@@ -119,7 +119,7 @@ export default function App() {
     try {
       const storedPlans = localStorage.getItem("tripmate_local_plans");
       const allPlans = storedPlans ? JSON.parse(storedPlans) : [];
-      return allPlans.filter((p: any) => p.userId === session.id);
+      return allPlans.filter((p: TravelPlan) => p.userId === session.id);
     } catch (err) {
       console.error("Error reading saved plans from localStorage:", err);
       return [];
@@ -196,7 +196,7 @@ export default function App() {
           if (planErr) throw planErr;
 
           // 2단계: 일차별 활동 목록을 travel_items 컬럼 규격에 맞춰 다중 삽입(Bulk Insert)
-          const itemsPayload: any[] = [];
+          const itemsPayload: ReturnType<typeof mapToSupabaseItem>[] = [];
           completePlan.planContent.forEach((dayObj) => {
             if (Array.isArray(dayObj.activities)) {
               dayObj.activities.forEach((act, idx) => {
@@ -231,7 +231,7 @@ export default function App() {
           goToTab("my_trips");
           return;
         }
-      } catch (err: any) {
+      } catch (err) {
         console.error("Failed to save to Supabase. Attempting local fallback.", err);
         supabaseSaveFailed = true;
       }
@@ -299,7 +299,7 @@ export default function App() {
             
           if (delErr) throw delErr;
 
-          const itemsPayload: any[] = [];
+          const itemsPayload: ReturnType<typeof mapToSupabaseItem>[] = [];
           updatedPlan.planContent.forEach((dayObj) => {
             if (Array.isArray(dayObj.activities)) {
               dayObj.activities.forEach((act, idx) => {
@@ -331,7 +331,7 @@ export default function App() {
       const storedPlans = localStorage.getItem("tripmate_local_plans");
       const allPlans = storedPlans ? JSON.parse(storedPlans) : [];
       
-      const index = allPlans.findIndex((p: any) => p.id === updatedPlan.id);
+      const index = allPlans.findIndex((p: TravelPlan) => p.id === updatedPlan.id);
       if (index !== -1) {
         allPlans[index] = updatedPlan;
       } else {
@@ -381,7 +381,7 @@ export default function App() {
           console.log("Deleted plan in Supabase relational tables successfully.");
           return;
         }
-      } catch (err: any) {
+      } catch (err) {
         console.error("Failed to delete in Supabase. Falling back to local.", err);
         showToast("클라우드 삭제에 실패해 이 기기에서만 삭제합니다.", "error");
       }
@@ -391,7 +391,7 @@ export default function App() {
       const storedPlans = localStorage.getItem("tripmate_local_plans");
       const allPlans = storedPlans ? JSON.parse(storedPlans) : [];
       
-      const filtered = allPlans.filter((p: any) => p.id !== id);
+      const filtered = allPlans.filter((p: TravelPlan) => p.id !== id);
       localStorage.setItem("tripmate_local_plans", JSON.stringify(filtered));
 
       queryClient.setQueryData<TravelPlan[]>(["travel-plans", session?.id], (old = []) =>

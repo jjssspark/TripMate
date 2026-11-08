@@ -171,9 +171,10 @@ export default function LoginSignup({ onLoginSuccess, onShowToast }: LoginSignup
           onLoginSuccess(sessionData);
         }
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error("Auth submit logic error:", err);
-      setError(err.message || "인증 처리 중 알 수 없는 오류가 발생했습니다.");
+      // Supabase AuthError도 Error를 상속하므로 instanceof 한 번으로 메시지를 꺼낼 수 있다.
+      setError(err instanceof Error && err.message ? err.message : "인증 처리 중 알 수 없는 오류가 발생했습니다.");
     }
   };
 

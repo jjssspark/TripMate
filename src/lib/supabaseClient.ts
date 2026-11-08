@@ -4,7 +4,7 @@
  */
 
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
-import { TravelPlan, ItineraryDay, UserSession } from "../types";
+import { TravelPlan, ItineraryDay, ItineraryActivity, UserSession } from "../types";
 
 // Configuration keys in localStorage
 const URL_KEY = "tripmate_supabase_url";
@@ -19,8 +19,8 @@ export interface SupabaseConfig {
 
 export function getSupabaseConfig(): SupabaseConfig {
   // .env 환경변수를 우선 로드하고 없으면 로컬 스토리지를 차선책으로 둡니다.
-  const url = localStorage.getItem(URL_KEY) || (import.meta as any).env?.VITE_SUPABASE_URL || "";
-  const anonKey = localStorage.getItem(KEY_KEY) || (import.meta as any).env?.VITE_SUPABASE_ANON_KEY || "";
+  const url = localStorage.getItem(URL_KEY) || import.meta.env.VITE_SUPABASE_URL || "";
+  const anonKey = localStorage.getItem(KEY_KEY) || import.meta.env.VITE_SUPABASE_ANON_KEY || "";
   
   // 로컬로 명시되어 있지 않고 둘 다 정의되어 있으면 Supabase 모드를 기본 활성화합니다.
   const active = localStorage.getItem(MODE_KEY) !== "local" && !!url && !!anonKey;
@@ -176,15 +176,47 @@ function getMockupImage(category: string, destination: string, index: number): s
   return "https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=500&auto=format&fit=crop";
 }
 
+// travel_plans를 travel_items(+users)와 조인해 읽을 때 오는 행. 컬럼 목록은 docs/DATABASE.md와 같다.
+// 타입은 추정이 아니라 아래 매핑 코드가 실제로 읽는 필드 기준이다.
+export interface TravelItemRow {
+  id: number | string;
+  day_number: number;
+  visit_time: string | null;
+  place_name: string;
+  category: string | null;
+  /** text[] 컬럼. 태그 배열을 여기 넣는다. */
+  description: string[] | null;
+  is_must_visit: boolean | null;
+  image_url: string | null;
+}
+
+export interface TravelPlanRow {
+  id: string;
+  user_seq?: number;
+  user_id?: string;
+  users?: { user_id?: string } | null;
+  title: string;
+  destination: string;
+  start_date: string;
+  end_date: string;
+  budget: string | null;
+  companion: string | null;
+  styles: string[] | null;
+  must_visit_places: string[] | string | null;
+  is_shared: boolean | null;
+  created_at: string;
+  travel_items?: TravelItemRow[] | null;
+}
+
 // Map database column names (snake_case) to client properties (camelCase)
-export function mapFromSupabase(row: any): TravelPlan {
+export function mapFromSupabase(row: TravelPlanRow): TravelPlan {
   // 조인되어 들어온 travel_items 데이터를 일차별(day) ItineraryDay 구조로 복원
   const rawItems = Array.isArray(row.travel_items) ? row.travel_items : [];
   
   // day_number 별로 그룹화
   const daysMap: { [key: number]: ItineraryDay } = {};
   
-  rawItems.forEach((item: any) => {
+  rawItems.forEach((item) => {
     const dNum = item.day_number;
     if (!daysMap[dNum]) {
       daysMap[dNum] = {
@@ -271,7 +303,7 @@ export function mapFromSupabase(row: any): TravelPlan {
   };
 }
 
-export function mapToSupabase(plan: TravelPlan): any {
+export function mapToSupabase(plan: TravelPlan) {
   const mustVisitArr = plan.mustVisitPlaces ? plan.mustVisitPlaces.split(",").map(s => s.trim()).filter(Boolean) : [];
 
   return {
@@ -330,7 +362,7 @@ export async function fetchPublicPlan(planId: string): Promise<TravelPlan | null
   return mapFromSupabase(data);
 }
 
-export function mapToSupabaseItem(act: any, planId: string, dayNumber: number, sequence: number): any {
+export function mapToSupabaseItem(act: ItineraryActivity, planId: string, dayNumber: number, sequence: number) {
   // "오전 09:30" -> "09:30:00" 변환
   let rawTime = "09:00:00";
   if (act.time) {

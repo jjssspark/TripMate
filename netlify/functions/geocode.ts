@@ -1,4 +1,5 @@
 import https from "https";
+import type { NetlifyEvent } from "../../server/http/netlify";
 
 const serverGeocodeCache: { [key: string]: { lat: number; lon: number } } = {};
 
@@ -41,7 +42,7 @@ function fetchCoordinatesFromOSM(searchQuery: string): Promise<{ lat: number; lo
   });
 }
 
-export const handler = async (event: any) => {
+export const handler = async (event: NetlifyEvent) => {
   const headers = {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Headers": "Content-Type",
