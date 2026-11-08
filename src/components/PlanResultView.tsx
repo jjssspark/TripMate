@@ -3,16 +3,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState, useEffect, useRef } from "react";
+import { useState } from "react";
 import { TravelPlan, ItineraryActivity } from "../types";
 import { EditIcon, ShareIcon, BookmarkIcon, PlusCircleIcon, TrashIcon, CheckIcon, ArrowLeftIcon } from "./Icons";
 import { setPlanShared } from "../lib/supabaseClient";
 import { getPlanCoverImage } from "../lib/planDisplay";
-
-interface FeedbackMessage {
-  role: "user" | "ai";
-  text: string;
-}
+import PlanMap from "./plan-result/PlanMap";
+import FeedbackPanel from "./plan-result/FeedbackPanel";
 
 interface PlanResultViewProps {
   plan: TravelPlan;
@@ -24,11 +21,6 @@ interface PlanResultViewProps {
   onShowToast?: (message: string, type: "success" | "error") => void;
 }
 
-// 서버 예산 25초(TOTAL_BUDGET_MS)에 의도 분류·사진 첨부가 더 붙는다. 그보다 여유를 두되
-// 무한정 기다리지는 않는다.
-const REVISE_TIMEOUT_MS = 35_000;
-
-const geocodeCache: { [key: string]: [number, number] } = {};
 
 /** 여행 시작일 기준 N일차의 날짜 라벨. "2026-08-14", 1 → "8.15 (토)" */
 function formatDayDate(startDate: string, dayIndex: number): string {
@@ -54,201 +46,7 @@ export default function PlanResultView({
   const [savingLoading, setSavingLoading] = useState(false);
   const [isSavingToMyPage, setIsSavingToMyPage] = useState(false);
   const [isSharing, setIsSharing] = useState(false);
-  const [feedbackMessages, setFeedbackMessages] = useState<FeedbackMessage[]>([]);
-  const [feedbackInput, setFeedbackInput] = useState("");
-  const [isRevising, setIsRevising] = useState(false);
-
-  const mapContainerRef = useRef<HTMLDivElement>(null);
-  const mapInstanceRef = useRef<any>(null);
-
   const selectedDay = plan.planContent?.[selectedDayIdx] || plan.planContent?.[0];
-
-  // Leaflet 지도 초기화 및 마커 렌더링
-  useEffect(() => {
-    const L = (window as any).L;
-    if (!L || !mapContainerRef.current) return;
-
-    let isMounted = true;
-
-    // 기존 지도 인스턴스가 있다면 제거 (메모리 누수 및 지도 중복 에러 방지)
-    if (mapInstanceRef.current) {
-      try {
-        mapInstanceRef.current.remove();
-      } catch (e) {
-        console.warn("Error removing previous map instance:", e);
-      }
-      mapInstanceRef.current = null;
-    }
-
-    const activities = selectedDay?.activities || [];
-    if (activities.length === 0) return;
-
-    // 도시별 위경도 사전
-    const CITY_COORDS: { [key: string]: [number, number] } = {
-      대전: [36.3504, 127.3845],
-      서울: [37.5665, 126.9780],
-      제주: [33.4996, 126.5312],
-      도쿄: [35.6762, 139.6503],
-      tokyo: [35.6762, 139.6503],
-      오사카: [34.6937, 135.5023],
-      osaka: [34.6937, 135.5023],
-      파리: [48.8566, 2.3522],
-      paris: [48.8566, 2.3522],
-      시드니: [-33.8688, 151.2093],
-      sydney: [-33.8688, 151.2093],
-    };
-
-    // 목적지에 따른 중심좌표 획득
-    let centerLat = 37.5665;
-    let centerLng = 126.9780;
-    const dest = plan.destination || "";
-    for (const key in CITY_COORDS) {
-      if (dest.includes(key)) {
-        [centerLat, centerLng] = CITY_COORDS[key];
-        break;
-      }
-    }
-
-    const loadMapAndMarkers = async () => {
-      const latlngs: [number, number][] = [];
-
-      for (let idx = 0; idx < activities.length; idx++) {
-        const act = activities[idx];
-        let lat = act.latitude;
-        let lng = act.longitude;
-
-        // 좌표 정보가 부실하거나 유효하지 않은 경우 실시간 주소 지오코딩 조회
-        if (typeof lat !== "number" || typeof lng !== "number" || lat === 0 || lng === 0) {
-          const searchTitle = act.title;
-          const cacheKey = `${dest}_${searchTitle}`;
-
-          if (geocodeCache[cacheKey]) {
-            [lat, lng] = geocodeCache[cacheKey];
-          } else {
-            try {
-              // 로컬 프록시 API 호출하여 CORS와 429 에러 방어
-              const url = `/api/geocode?city=${encodeURIComponent(dest)}&query=${encodeURIComponent(searchTitle)}`;
-              const res = await fetch(url);
-              if (res.ok) {
-                const data = await res.json();
-                if (data && data.lat && data.lon) {
-                  lat = data.lat;
-                  lng = data.lon;
-                  geocodeCache[cacheKey] = [lat, lng];
-                }
-              }
-            } catch (err) {
-              console.error("Geocoding proxy fetch failed for:", searchTitle, err);
-            }
-          }
-        }
-
-        // 지오코딩 실패 또는 좌표 미존재 시 대략적인 fallback 오프셋 생성
-        if (typeof lat !== "number" || typeof lng !== "number" || lat === 0 || lng === 0) {
-          lat = centerLat + (idx * 0.005) - 0.01;
-          lng = centerLng + (idx * 0.005) - 0.01;
-        }
-
-        latlngs.push([lat, lng]);
-      }
-
-      if (!isMounted || !mapContainerRef.current) return;
-
-      try {
-        // 지도 객체 생성 (배경은 OpenStreetMap 이용)
-        const map = L.map(mapContainerRef.current, {
-          zoomControl: false,
-          attributionControl: false,
-        }).setView(latlngs[0] || [centerLat, centerLng], 13);
-
-        mapInstanceRef.current = map;
-
-        // 아름다운 Voyager 스타일 타일맵 레이어 적용 (CARTO CDN)
-        L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
-          maxZoom: 19,
-        }).addTo(map);
-
-        // 마커 추가
-        const markers: any[] = [];
-        activities.forEach((act, idx) => {
-          const coord = latlngs[idx];
-          const category = act.category || "관광";
-          const color = category === "맛집" ? "#ef4444" : category === "카페" ? "#f59e0b" : category === "쇼핑" ? "#10b981" : category === "숙소" ? "#8b5cf6" : "#3b82f6";
-          
-          const customIcon = L.divIcon({
-            html: `
-              <div style="
-                background-color: ${color};
-                color: white;
-                width: 26px;
-                height: 26px;
-                border-radius: 50%;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                font-weight: 800;
-                font-size: 11px;
-                border: 2px solid white;
-                box-shadow: 0 2px 6px rgba(0,0,0,0.35);
-                transition: all 0.2s ease;
-              " class="hover:scale-115">
-                ${idx + 1}
-              </div>
-            `,
-            className: "custom-leaflet-marker",
-            iconSize: [26, 26],
-            iconAnchor: [13, 13],
-          });
-
-          const marker = L.marker(coord, { icon: customIcon }).addTo(map);
-          
-          // 마커 클릭 시 팝업 노출
-          marker.bindPopup(`
-            <div style="font-family: sans-serif; padding: 2px; width: 130px;">
-              <h5 style="margin: 0 0 4px 0; font-size: 12px; font-weight: bold; color: #1e293b;">${idx + 1}. ${act.title}</h5>
-              <p style="margin: 0; font-size: 10px; color: #64748b;">${act.time} • ${category}</p>
-            </div>
-          `);
-
-          markers.push(marker);
-        });
-
-        // 마커들을 이어주는 폴리라인(동선선) 추가
-        if (latlngs.length > 1) {
-          L.polyline(latlngs, {
-            color: "#3b82f6",
-            weight: 3.5,
-            dashArray: "6, 6",
-            opacity: 0.85,
-            lineJoin: "round",
-          }).addTo(map);
-        }
-
-        // 마커들 전체가 한눈에 보이도록 지도 뷰 영역 맞추기
-        if (latlngs.length > 0) {
-          const group = new L.featureGroup(markers);
-          map.fitBounds(group.getBounds().pad(0.15));
-        }
-      } catch (err) {
-        console.error("Leaflet map initialization error:", err);
-      }
-    };
-
-    loadMapAndMarkers();
-
-    return () => {
-      isMounted = false;
-      if (mapInstanceRef.current) {
-        try {
-          mapInstanceRef.current.remove();
-        } catch (e) {
-          console.warn("Error on cleanup map instance:", e);
-        }
-        mapInstanceRef.current = null;
-      }
-    };
-  }, [selectedDay, plan.destination]);
-
   const handleShare = async () => {
     if (!isSavedMode || !plan.id) {
       onShowToast?.("공유하려면 먼저 '이 일정 저장하기'로 저장해주세요.", "error");
@@ -285,9 +83,9 @@ export default function PlanResultView({
           url: shareUrl,
         });
       }
-    } catch (err: any) {
+    } catch (err) {
       // 사용자가 공유 시트를 취소한 경우(AbortError)는 오류가 아니므로 무시
-      if (err?.name !== "AbortError") {
+      if (!(err instanceof Error && err.name === "AbortError")) {
         console.error("Share failed:", err);
         onShowToast?.("공유 중 오류가 발생했습니다.", "error");
       }
@@ -296,91 +94,11 @@ export default function PlanResultView({
     }
   };
 
-  const handleSendFeedback = async () => {
-    const text = feedbackInput.trim();
-    if (!text || isRevising) return;
-
-    setFeedbackMessages((prev) => [...prev, { role: "user", text }]);
-    setFeedbackInput("");
-    setIsRevising(true);
-
-    // 서버 예산 25초에 의도 분류와 사진 첨부가 더 붙는다. 그보다 넉넉히 잡되,
-    // 응답이 영영 안 와도 입력창이 잠긴 채 남지 않도록 상한을 둔다.
-    const controller = new AbortController();
-    const abortTimer = setTimeout(() => controller.abort(), REVISE_TIMEOUT_MS);
-
-    try {
-      const res = await fetch("/api/revise-plan", {
-        signal: controller.signal,
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          destination: plan.destination,
-          startDate: plan.startDate,
-          endDate: plan.endDate,
-          budget: plan.budget,
-          companion: plan.companion,
-          intensity: plan.intensity,
-          transportMode: plan.transportMode,
-          styles: plan.styles,
-          mustVisitPlaces: plan.mustVisitPlaces,
-          planContent: plan.planContent,
-          feedback: text,
-        }),
-      });
-      const data = await res.json();
-
-      if (data.success && Array.isArray(data.planContent)) {
-        // 서버가 준 narrationDegraded를 그대로 반영한다. 안 읽으면 이전 값이 남는다.
-        const degraded = data.narrationDegraded === true;
-        const updatedPlan = { ...plan, planContent: data.planContent, narrationDegraded: degraded };
-        setPlan(updatedPlan);
-
-        // 서버가 무엇을 실제로 반영했는지 그대로 전한다. 비어 있는데 "수정했다"고 하면
-        // 사용자는 자기 요청이 무시된 걸 알 방법이 없다.
-        const applied: string[] = Array.isArray(data.applied) ? data.applied : [];
-        setFeedbackMessages((prev) => [
-          ...prev,
-          {
-            role: "ai",
-            text: applied.length > 0
-              ? `${applied.join(", ")}을(를) 반영해 일정을 다시 짰어요. 아래 내용을 확인해보세요.`
-              : "그 요청은 아직 일정 조건으로 옮기지 못해서 장소만 다시 골랐어요. 지금 바꿀 수 있는 건 일정 강도(여유롭게·빡빡하게), 이동수단, 취향, 특정 장소 추가·제외예요.",
-          },
-        ]);
-        if (isSavedMode && onUpdatePlan) {
-          await onUpdatePlan(updatedPlan);
-        }
-        // 설명만 짧아진 것이지 일정은 정상이다. 오류 톤이 아니라 성공 톤으로 안내한다.
-        onShowToast?.(
-          degraded
-            ? "일정은 수정했지만 설명을 다 쓰지 못했습니다. 다시 시도하면 설명이 채워집니다."
-            : applied.length > 0
-              ? "일정이 피드백을 반영해 수정되었습니다!"
-              : "반영할 수 있는 조건을 찾지 못해 장소만 다시 골랐습니다.",
-          "success",
-        );
-      } else {
-        setFeedbackMessages((prev) => [
-          ...prev,
-          { role: "ai", text: data.error?.message || "일정을 수정하지 못했어요. 다시 시도해주세요." },
-        ]);
-      }
-    } catch (err) {
-      console.error("revise-plan request failed:", err);
-      const timedOut = err instanceof DOMException && err.name === "AbortError";
-      setFeedbackMessages((prev) => [
-        ...prev,
-        {
-          role: "ai",
-          text: timedOut
-            ? "응답이 너무 오래 걸려 중단했어요. 잠시 후 다시 시도해주세요."
-            : "네트워크 오류로 일정을 수정하지 못했어요.",
-        },
-      ]);
-    } finally {
-      clearTimeout(abortTimer);
-      setIsRevising(false);
+  // AI 피드백으로 다시 짠 일정을 상태에 반영하고, 저장된 일정이면 서버에도 반영한다
+  const handlePlanRevised = async (updatedPlan: TravelPlan) => {
+    setPlan(updatedPlan);
+    if (isSavedMode && onUpdatePlan) {
+      await onUpdatePlan(updatedPlan);
     }
   };
 
@@ -395,7 +113,7 @@ export default function PlanResultView({
   };
 
   // Editing activity fields helper
-  const handleActivityChange = (actIdx: number, field: keyof ItineraryActivity, value: any) => {
+  const handleActivityChange = (actIdx: number, field: keyof ItineraryActivity, value: string) => {
     const updatedContent = [...plan.planContent];
     const day = updatedContent[selectedDayIdx];
     if (day && day.activities?.[actIdx]) {
@@ -615,27 +333,7 @@ export default function PlanResultView({
         <div className="grid grid-cols-1 md:grid-cols-12 gap-6 mt-2">
           {/* Left Column: Place visual insights */}
           <div className="md:col-span-4 space-y-6">
-            <div className="relative rounded-2xl overflow-hidden aspect-[4/3] shadow-md group z-10">
-              <div ref={mapContainerRef} className="w-full h-full" style={{ minHeight: "220px" }} />
-              <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent p-3 pt-6 flex justify-between items-center text-white z-[1000] pointer-events-none">
-                <div className="flex items-center gap-1.5">
-                  <span className="material-symbols-outlined text-xs font-bold flex items-center justify-center text-white">
-                    location_on
-                  </span>
-                  <span className="font-label-md text-[11px] font-bold">{plan.destination} 여정 동선</span>
-                </div>
-                <a
-                  href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-                    selectedDay.activities?.[0]?.title || plan.destination
-                  )}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="bg-white/20 hover:bg-white/35 backdrop-blur-md px-2.5 py-1 rounded-full text-[10px] font-label-md text-white border-none transition-all font-bold select-none pointer-events-auto shadow-sm"
-                >
-                  지도에서 검색
-                </a>
-              </div>
-            </div>
+            <PlanMap day={selectedDay} destination={plan.destination} />
 
             {/* AI Travel Tip Card */}
             <div className="bg-white p-5 rounded-2xl border border-outline-variant/35 shadow-sm space-y-3">
@@ -857,63 +555,8 @@ export default function PlanResultView({
         </div>
       )}
 
-      {/* 자연어 피드백 채팅 — "맛집 위주로 바꿔줘" 같은 요청을 Gemini에 보내 일정 재생성 */}
       {!readOnly && (
-        <div className="mt-8 bg-white rounded-2xl border border-outline-variant/35 shadow-sm overflow-hidden">
-          <div className="px-5 py-4 border-b border-outline-variant/30 flex items-center gap-2">
-            <span className="material-symbols-outlined text-primary flex items-center justify-center">forum</span>
-            <h4 className="text-sm font-extrabold text-on-surface">AI에게 일정 수정 요청하기</h4>
-          </div>
-
-          {feedbackMessages.length > 0 && (
-            <div className="px-5 py-4 space-y-3 max-h-64 overflow-y-auto">
-              {feedbackMessages.map((msg, idx) => (
-                <div key={idx} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
-                  <div
-                    className={`max-w-[80%] px-4 py-2.5 rounded-2xl text-xs leading-relaxed ${
-                      msg.role === "user"
-                        ? "bg-primary text-white"
-                        : "bg-surface-container text-on-surface"
-                    }`}
-                  >
-                    {msg.text}
-                  </div>
-                </div>
-              ))}
-              {isRevising && (
-                <div className="flex justify-start">
-                  <div className="max-w-[80%] px-4 py-2.5 rounded-2xl text-xs bg-surface-container text-on-surface-variant">
-                    AI가 일정을 수정하는 중...
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              handleSendFeedback();
-            }}
-            className="flex items-center gap-2 px-4 py-3 border-t border-outline-variant/30"
-          >
-            <input
-              type="text"
-              value={feedbackInput}
-              onChange={(e) => setFeedbackInput(e.target.value)}
-              placeholder="예: 맛집 위주로 바꿔줘, 좀 더 여유롭게 해줘"
-              disabled={isRevising}
-              className="flex-1 bg-surface-container rounded-xl px-4 py-2.5 text-xs outline-none border-none disabled:opacity-60"
-            />
-            <button
-              type="submit"
-              disabled={isRevising || !feedbackInput.trim()}
-              className="w-10 h-10 flex items-center justify-center rounded-full bg-primary text-white disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer border-none active:scale-90 transition-all shrink-0"
-            >
-              <span className="material-symbols-outlined text-lg flex items-center justify-center">send</span>
-            </button>
-          </form>
-        </div>
+        <FeedbackPanel plan={plan} onPlanRevised={handlePlanRevised} onShowToast={onShowToast} />
       )}
     </div>
   );
