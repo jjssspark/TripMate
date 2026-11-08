@@ -64,7 +64,7 @@ Supabase (Auth + PostgreSQL) ◄── 브라우저에서 직접 호출
 
 설정값은 localStorage(`tripmate_supabase_url` 등)가 환경변수보다 우선합니다. 배포된 데모에서 사용자가 자기 Supabase 프로젝트를 연결해 볼 수 있게 하려는 의도입니다.
 
-`travel_plans` 테이블 스키마는 [README의 데이터베이스 스키마](../README.md) 절에 있습니다.
+`travel_plans` 테이블 스키마는 [DATABASE.md](DATABASE.md)에 있습니다.
 
 ## 프론트엔드
 
@@ -84,14 +84,12 @@ Supabase (Auth + PostgreSQL) ◄── 브라우저에서 직접 호출
 
 ## 알려진 개선 과제
 
-> 수치 기준일: 2026-08-17
+> 수치 기준일: 2026-11-08
 
-1. **번들 크기** — `app` 청크가 gzip 209KB입니다. 2026-08-01 관측치(164KB)보다 커졌습니다. 그 사이 초성 검색·지도 연동이 들어간 것을 감안해도 증가 추세이며, Leaflet과 motion을 동적 import로 분리하는 작업이 아직 안 됐습니다.
-2. **파일 크기** — `PlanResultView.tsx` 892줄로 코딩 규약의 800줄 상한을 넘습니다. `server/server.ts`는 파이프라인 추출로 845줄 → 433줄이 되어 해소됐습니다.
-3. **`any` 타입 39곳** — Gemini 응답과 Supabase 반환값의 타입 경계에 몰려 있습니다. 응답 스키마 타입을 정의하면 대부분 제거됩니다.
-   그때까지 `eslint.config.js`에서 `@typescript-eslint/no-explicit-any`를 `warn`으로 두고 lint 출력에 계속 노출시켜 추적합니다.
-   숫자가 0이 되면 규칙을 `error`로 되돌립니다.
-4. **테스트 범위** — `npm test` 기준 18개 파일 251개 테스트가 통과합니다. 파이프라인 전 단계(후보 추출·존재 검증·날짜 배정·순서 결정·시각 배치·설명·쿼터·의도 분류)와 목적지 검색이 대상입니다. 아직 대상 밖인 것은 React 컴포넌트와 E2E 플로우입니다.
+1. **번들 크기** — `app` 청크가 gzip 224.7KB입니다(2026-08-17 209KB, 2026-08-01 164KB). 기능 추가 없이 의존성 업데이트만으로도 15KB가 늘었습니다. Leaflet과 motion을 동적 import로 분리하는 작업이 아직 안 됐습니다. 예산(300KB) 안이긴 합니다.
+2. **CI 부재** — lint·typecheck·test를 돌리는 GitHub Actions가 없습니다. lint 설정이 깨진 채 두 달 넘게 방치된 것(TS-035)도 이 때문입니다.
+3. **장소 사진이 목업** — 배포 서버에 Google Places 키가 없어 카테고리별 스톡 사진이 반복됩니다. Maps Platform 결제 계정을 열지 않는 한 그대로입니다(ADR-3).
+4. **테스트 범위** — `npm test` 기준 18개 파일 252개 테스트가 통과합니다. 파이프라인 전 단계(후보 추출·존재 검증·날짜 배정·순서 결정·시각 배치·설명·쿼터·의도 분류)와 목적지 검색이 대상입니다. 아직 대상 밖인 것은 React 컴포넌트와 E2E 플로우입니다.
 5. **후보 추출 지연 변동** — 실측 2.7~11.4초로 흔들립니다. 튀는 날은 25초 예산을 먹어 설명이 강등됩니다. 요청 후보 수를 줄여(60 → 44) 꼬리를 줄였지만 변동 자체는 남습니다. 근본 해결은 예산 재분배가 아니라 비동기 구조입니다.
 
 ## 제약 — 영업 상태를 알 수 없다
@@ -124,3 +122,6 @@ category_group_name, x, y
 
 - **서버 로직 중복** — `server/itinerary/`로 추출 완료. 위 "이중 서버 계층" 참고.
 - **`server/server.ts` 800줄 초과** — 433줄로 축소.
+- **`PlanResultView.tsx` 920줄, `PlannerFlow.tsx` 812줄** (2026-11-08) — 지도·수정 패널을 `components/plan-result/`로, 3단계 폼을 `components/planner/`로 떼어 각각 564줄·377줄.
+- **`any` 타입 37곳** (2026-11-08) — Netlify 이벤트(`server/http/netlify.ts`)와 Supabase 행(`TravelPlanRow`/`TravelItemRow`) 타입을 정의해 0곳. `no-explicit-any`를 `error`로 올렸다.
+- **지도 타일** (2026-11-08) — CARTO가 키를 요구해 OpenStreetMap 공식 타일로 교체(ADR-10, TS-034).

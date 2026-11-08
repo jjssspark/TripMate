@@ -5,7 +5,8 @@
 ```
 output/
 ├── screenshots/   정지 화면. 01부터 순번
-└── video/         데모 영상·GIF
+├── video/         데모 영상·GIF
+└── lighthouse/    Lighthouse 측정 요약(README.md). 원본 JSON은 커밋하지 않는다
 ```
 
 ## 파일명 규칙

@@ -53,3 +53,6 @@ output/screenshots/_raw/
 # README가 https://youtu.be/R79fwGeFfRU 를 링크한다. 저장소에 두면
 # 스크린샷과 달리 diff가 불가능한 수 MB 바이너리가 히스토리에 쌓인다.
 output/video/
+
+# Lighthouse 원본 리포트(각 400KB 이상). 요약은 output/lighthouse/README.md와 docs/PERFORMANCE.md에 적는다.
+output/lighthouse/*.json

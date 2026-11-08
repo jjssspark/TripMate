@@ -14,9 +14,9 @@
 
 ## 카드에서 뺀 것 (다른 채널이 담당)
 
-- 응답속도(파이프라인 교체 후 로컬 실측 7.2초), 단위 테스트 201개 통과, Lighthouse Performance 61점(이전 파이프라인 기준, 재측정 필요) → GitHub `docs/PERFORMANCE.md`
-- 트러블슈팅 6건 상세(재현 조건·틀렸던 가설·검증 로그) → 노션 트러블슈팅 문서
-- ADR 6건 상세(고려한 대안·근거·실제 결과·뒤집힌 판단) → 노션 ADR 문서
+- 응답속도(배포 환경 실측 8.5초, 1박 2일), 단위 테스트 252개 통과, Lighthouse Performance 80점(랜딩 데스크톱, 배포 URL, 2026-11-08) → GitHub `docs/PERFORMANCE.md`
+- 트러블슈팅 15건 상세(재현 조건·틀렸던 가설·검증 로그) → GitHub `docs/TROUBLESHOOTING.md` (노션 사본은 초기 6건 기준이라 README는 GitHub 쪽을 가리킨다)
+- ADR 10건 상세(고려한 대안·근거·실제 결과·뒤집힌 판단) → GitHub `docs/ADR.md` (노션 사본은 초기 6건 기준)
 - 나머지 스크린샷 6장(02~07) → GitHub README
 - 데모 영상 전체 → 유튜브 호스팅([R79fwGeFfRU](https://youtu.be/R79fwGeFfRU)). README 상단에 썸네일로 걸고 저장소에는 두지 않는다
 

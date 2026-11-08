@@ -18,7 +18,7 @@ AI가 추천한 장소는 카카오 로컬 API로 실재 여부를 대조한 뒤
 ![Supabase](https://img.shields.io/badge/Supabase-3ecf8e?style=flat-square&logo=supabase&logoColor=white)
 ![Gemini](https://img.shields.io/badge/Gemini_API-8e75b2?style=flat-square&logo=googlegemini&logoColor=white)
 ![Netlify](https://img.shields.io/badge/Netlify-00c7b7?style=flat-square&logo=netlify&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-251_passing-3fb950?style=flat-square)
+![Tests](https://img.shields.io/badge/tests-252_passing-3fb950?style=flat-square)
 
 <br/>
 
@@ -67,7 +67,7 @@ AI가 맡는 건 ①과 ⑥ 두 단계뿐입니다. 중복·동선·시각은 �
 
 | 항목 | 값 |
 | :--- | :--- |
-| 실측 응답 시간 | 12~20초 (3박 4일 기준) |
+| 실측 응답 시간 | 1박 2일 8.5초 (배포 환경, 2026-11) · 3박 4일 12~20초 (2026-08) |
 | 일정 1건당 AI 호출 | 2회 |
 | 서버 예산 상한 | 25초 |
 
@@ -168,7 +168,8 @@ AI 실패 시 정적 데이터로 그럴듯한 일정을 만들어 200으로 돌
 | AI | Gemini 2.5 Flash / Flash-Lite | 한도가 모델별이라 두 단계의 버킷을 분리 |
 | 장소 검증 | Kakao Local API | 국내 POI 정확도. 상호명 대조로 환각 차단 |
 | 서버 | Express (로컬) · Netlify Functions (운영) | 공통 로직은 `server/itinerary/`에 단일화 |
-| 테스트 | Vitest — 18파일 251개 | 파이프라인 전 단계 + 목적지 검색 |
+| 지도 | Leaflet + OpenStreetMap 타일 | 키 없이 쓰는 무료 타일. CARTO가 키를 요구하기 시작해 교체(ADR-10) |
+| 테스트 | Vitest — 18파일 252개 | 파이프라인 전 단계 + 목적지 검색 |
 
 ---
 
@@ -215,6 +216,8 @@ npm run lint       # ESLint
 ```
 ├── src/
 │   ├── components/          화면 단위 컴포넌트
+│   │   ├── planner/           일정 만들기 3단계 폼
+│   │   └── plan-result/       일정 결과의 지도·자연어 수정 패널
 │   └── lib/                 Supabase 클라이언트, 초성 검색, 표시 유틸
 ├── server/
 │   ├── itinerary/           ★ 파이프라인 — 로컬·운영이 공유
@@ -227,7 +230,7 @@ npm run lint       # ESLint
 │   ├── places/kakao.ts      ② 실재 검증
 │   └── server.ts            로컬 개발 서버 (Express)
 ├── netlify/functions/       운영 API — 위 파이프라인을 호출하는 얇은 어댑터
-├── tests/                   251개
+├── tests/                   252개
 └── docs/
 ```
 
@@ -280,11 +283,12 @@ auth.users ──< users ──< travel_plans ──< travel_items
 
 | 문서 | 내용 |
 | :--- | :--- |
-| [ADR](https://app.notion.com/p/ADR-3b1f6f1e619a80fdb329cde5988f01e0?source=copy_link) | 결정 6건 — 고려한 대안, 근거, 실제 결과, 뒤집힌 판단 |
-| [트러블슈팅](https://app.notion.com/p/3b1f6f1e619a80aeb0a8fbc1532d0f73?source=copy_link) | 사고 6건 — 재현 조건, 틀렸던 가설, 검증 로그 |
+| [ADR](docs/ADR.md) | 결정 10건 — 고려한 대안, 근거, 실제 결과, 뒤집힌 판단 |
+| [트러블슈팅](docs/TROUBLESHOOTING.md) | 사고 15건 — 재현 조건, 틀렸던 가설, 검증 로그 |
+| [회고](docs/RETROSPECTIVE.md) | KPT — 네 번 다르게 고친 같은 문제, 바꾼 습관 |
 | [ARCHITECTURE.md](docs/ARCHITECTURE.md) | 구조와 설계 판단 근거 |
 | [API.md](docs/API.md) | 엔드포인트 계약과 에러 코드 |
-| [PERFORMANCE.md](docs/PERFORMANCE.md) | 번들 크기, 단계별 실측 |
+| [PERFORMANCE.md](docs/PERFORMANCE.md) | 번들 크기, Lighthouse, 응답 시간 실측 |
 
 ### 특히 오래 붙잡은 것
 
