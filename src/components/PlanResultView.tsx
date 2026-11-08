@@ -21,7 +21,6 @@ interface PlanResultViewProps {
   onShowToast?: (message: string, type: "success" | "error") => void;
 }
 
-
 /** 여행 시작일 기준 N일차의 날짜 라벨. "2026-08-14", 1 → "8.15 (토)" */
 function formatDayDate(startDate: string, dayIndex: number): string {
   if (!startDate) return `${dayIndex + 1}일차`;
@@ -46,7 +45,9 @@ export default function PlanResultView({
   const [savingLoading, setSavingLoading] = useState(false);
   const [isSavingToMyPage, setIsSavingToMyPage] = useState(false);
   const [isSharing, setIsSharing] = useState(false);
+
   const selectedDay = plan.planContent?.[selectedDayIdx] || plan.planContent?.[0];
+
   const handleShare = async () => {
     if (!isSavedMode || !plan.id) {
       onShowToast?.("공유하려면 먼저 '이 일정 저장하기'로 저장해주세요.", "error");
